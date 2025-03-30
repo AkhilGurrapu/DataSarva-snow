@@ -14,6 +14,14 @@ import Login from "@/pages/login";
 import { useEffect, useState } from "react";
 import { apiRequest } from "./lib/queryClient";
 
+// New Slingshot UI Components
+import Home from "@/pages/home";
+import Warehouses from "@/pages/warehouses";
+import CreateWarehouse from "@/pages/create-warehouse";
+import QueryAdvisor from "@/pages/query-advisor";
+import CostDashboard from "@/pages/dashboards/cost";
+import PerformanceDashboard from "@/pages/dashboards/performance";
+
 function AuthRouter() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +72,16 @@ function AuthRouter() {
 
   return (
     <Switch>
-      <Route path="/" component={() => <Dashboard user={user} onLogout={handleLogout} />} />
+      {/* Slingshot UI Routes */}
+      <Route path="/" component={() => <Home user={user} onLogout={handleLogout} />} />
+      <Route path="/warehouses" component={() => <Warehouses user={user} onLogout={handleLogout} />} />
+      <Route path="/create-warehouse" component={() => <CreateWarehouse user={user} onLogout={handleLogout} />} />
+      <Route path="/query-advisor" component={() => <QueryAdvisor user={user} onLogout={handleLogout} />} />
+      <Route path="/dashboards/cost" component={() => <CostDashboard user={user} onLogout={handleLogout} />} />
+      <Route path="/dashboards/performance" component={() => <PerformanceDashboard user={user} onLogout={handleLogout} />} />
+      
+      {/* Legacy UI Routes */}
+      <Route path="/old-dashboard" component={() => <Dashboard user={user} onLogout={handleLogout} />} />
       <Route path="/connections" component={() => <Connections user={user} onLogout={handleLogout} />} />
       <Route path="/query-optimizer" component={() => <QueryOptimizer user={user} onLogout={handleLogout} />} />
       <Route path="/etl-workflows" component={() => <EtlWorkflows user={user} onLogout={handleLogout} />} />
