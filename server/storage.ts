@@ -334,4 +334,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// The MemStorage class is already exported above

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { getStorage } from "./storage-factory";
 import { 
   insertUserSchema, 
   insertConnectionSchema, 
@@ -18,6 +18,9 @@ import MemoryStore from "memorystore";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  
+  // Get the initialized storage instance
+  const storage = getStorage();
 
   // Set up memory store for sessions
   const MemoryStoreSession = MemoryStore(session);
@@ -138,7 +141,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Test the connection before saving
       try {
-        await snowflakeService.testConnection(connectionData);
+        await snowflakeService.testConnection({
+          account: connectionData.account,
+          username: connectionData.username,
+          password: connectionData.password,
+          role: connectionData.role || "ACCOUNTADMIN", // Ensure role is not undefined
+          warehouse: connectionData.warehouse || "COMPUTE_WH" // Ensure warehouse is not undefined
+        });
       } catch (error: any) {
         return res.status(400).json({ message: `Connection failed: ${error.message}` });
       }
