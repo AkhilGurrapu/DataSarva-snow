@@ -563,6 +563,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: err.message });
     }
   });
+  
+  // Snowflake account usage tables endpoint
+  app.get("/api/snowflake/account-usage/tables", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connections = await storage.getConnectionsByUserId(userId);
+      
+      // Find an active connection
+      const activeConnection = connections.find(c => c.isActive);
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active Snowflake connection found. Please set a connection as active." });
+      }
+      
+      // Get account usage tables data
+      const tables = await snowflakeService.getAccountUsageTables(activeConnection);
+      
+      // Log activity
+      await storage.createActivityLog({
+        userId,
+        activityType: "QUERY_EXECUTED",
+        description: "Queried Snowflake account usage tables",
+        details: { connectionId: activeConnection.id }
+      });
+      
+      res.json(tables);
+    } catch (err: any) {
+      console.error("Error querying Snowflake account usage:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   return httpServer;
 }

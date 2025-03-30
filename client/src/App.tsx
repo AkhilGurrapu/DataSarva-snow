@@ -9,6 +9,7 @@ import QueryOptimizer from "@/pages/query-optimizer";
 import EtlWorkflows from "@/pages/etl-workflows";
 import Performance from "@/pages/performance";
 import Debugging from "@/pages/debugging";
+import SnowflakeTest from "@/pages/snowflake-test";
 import Login from "@/pages/login";
 import { useEffect, useState } from "react";
 import { apiRequest } from "./lib/queryClient";
@@ -69,6 +70,7 @@ function AuthRouter() {
       <Route path="/etl-workflows" component={() => <EtlWorkflows user={user} onLogout={handleLogout} />} />
       <Route path="/performance" component={() => <Performance user={user} onLogout={handleLogout} />} />
       <Route path="/debugging" component={() => <Debugging user={user} onLogout={handleLogout} />} />
+      <Route path="/snowflake-test" component={() => <SnowflakeTest user={user} onLogout={handleLogout} />} />
       <Route path="/login" component={() => <Login onLogin={setUser} />} />
       <Route component={NotFound} />
     </Switch>

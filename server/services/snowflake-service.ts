@@ -1,4 +1,5 @@
 import { type SnowflakeConnection } from "@shared/schema";
+import snowflake from 'snowflake-sdk';
 
 class SnowflakeService {
   async testConnection(connection: {
@@ -9,14 +10,36 @@ class SnowflakeService {
     warehouse: string;
   }): Promise<boolean> {
     try {
-      // In a real implementation, this would use a Snowflake SDK
-      // For now, we'll simulate a successful connection
       if (!connection.account || !connection.username || !connection.password) {
         throw new Error("Invalid connection parameters");
       }
       
-      return true;
-    } catch (error) {
+      const sfConnection = snowflake.createConnection({
+        account: connection.account,
+        username: connection.username,
+        password: connection.password,
+        role: connection.role,
+        warehouse: connection.warehouse
+      });
+      
+      // Create a promise-based connection
+      return new Promise((resolve, reject) => {
+        sfConnection.connect((err) => {
+          if (err) {
+            reject(new Error(`Unable to connect to Snowflake: ${err.message}`));
+            return;
+          }
+          
+          // Successfully connected, now disconnect
+          sfConnection.destroy((destroyErr) => {
+            if (destroyErr) {
+              console.warn('Error when disconnecting:', destroyErr);
+            }
+            resolve(true);
+          });
+        });
+      });
+    } catch (error: any) {
       throw new Error(`Failed to connect to Snowflake: ${error.message}`);
     }
   }
@@ -30,8 +53,6 @@ class SnowflakeService {
     results?: any[];
   }> {
     try {
-      // In a real implementation, this would use a Snowflake SDK
-      // For now, we'll simulate query execution with random times
       if (!connection.account || !connection.username || !connection.password) {
         throw new Error("Invalid connection parameters");
       }
@@ -46,21 +67,55 @@ class SnowflakeService {
         throw new Error("Invalid SQL syntax");
       }
       
-      // Simulate query execution time between 0.5-3 seconds
-      const executionTime = Math.floor(Math.random() * 2500) + 500;
+      const startTime = Date.now();
       
-      // Simulate bytes scanned
-      const bytesScanned = Math.floor(Math.random() * 100000000) + 1000000;
+      const sfConnection = snowflake.createConnection({
+        account: connection.account,
+        username: connection.username,
+        password: connection.password,
+        role: connection.role || "ACCOUNTADMIN", // Ensure never null
+        warehouse: connection.warehouse || "COMPUTE_WH" // Ensure never null
+      });
       
-      // Wait to simulate actual query execution
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Execute the query
+      const results = await new Promise<any[]>((resolve, reject) => {
+        sfConnection.connect((err) => {
+          if (err) {
+            reject(new Error(`Unable to connect to Snowflake: ${err.message}`));
+            return;
+          }
+          
+          sfConnection.execute({
+            sqlText: query,
+            complete: (executionErr, stmt, rows) => {
+              sfConnection.destroy((destroyErr) => {
+                if (destroyErr) {
+                  console.warn('Error when disconnecting:', destroyErr);
+                }
+              });
+              
+              if (executionErr) {
+                reject(new Error(`Failed to execute query: ${executionErr.message}`));
+                return;
+              }
+              resolve(rows || []);
+            }
+          });
+        });
+      });
+      
+      const executionTime = Date.now() - startTime;
+      
+      // Ideally, we would get bytes scanned from the query statistics
+      // For now, we'll estimate
+      const bytesScanned = Math.max(10000, results.length * 1000);
       
       return {
         executionTime,
         bytesScanned,
-        results: [] // In real implementation, this would contain results
+        results
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Failed to execute query: ${error.message}`);
     }
   }
@@ -72,14 +127,22 @@ class SnowflakeService {
     table: string
   ): Promise<any[]> {
     try {
-      // In a real implementation, this would fetch the actual schema
-      // For now, return a simulated schema
-      return [
-        { name: "ID", type: "NUMBER" },
-        { name: "NAME", type: "VARCHAR" },
-        { name: "CREATED_AT", type: "TIMESTAMP_NTZ" }
-      ];
-    } catch (error) {
+      const query = `
+        SELECT 
+          COLUMN_NAME as name, 
+          DATA_TYPE as type 
+        FROM 
+          ${database}.INFORMATION_SCHEMA.COLUMNS 
+        WHERE 
+          TABLE_SCHEMA = '${schema}' 
+          AND TABLE_NAME = '${table}'
+        ORDER BY 
+          ORDINAL_POSITION
+      `;
+      
+      const result = await this.executeQuery(connection, query);
+      return result.results || [];
+    } catch (error: any) {
       throw new Error(`Failed to get table schema: ${error.message}`);
     }
   }
@@ -90,11 +153,44 @@ class SnowflakeService {
     schema: string
   ): Promise<string[]> {
     try {
-      // In a real implementation, this would fetch the actual tables
-      // For now, return simulated tables
-      return ["CUSTOMERS", "ORDERS", "PRODUCTS"];
-    } catch (error) {
+      const query = `
+        SELECT 
+          TABLE_NAME 
+        FROM 
+          ${database}.INFORMATION_SCHEMA.TABLES 
+        WHERE 
+          TABLE_SCHEMA = '${schema}'
+        ORDER BY 
+          TABLE_NAME
+      `;
+      
+      const result = await this.executeQuery(connection, query);
+      return (result.results || []).map(row => row.TABLE_NAME);
+    } catch (error: any) {
       throw new Error(`Failed to get table list: ${error.message}`);
+    }
+  }
+  
+  async getAccountUsageTables(connection: SnowflakeConnection): Promise<any[]> {
+    try {
+      const query = `
+        SELECT 
+          TABLE_NAME, 
+          TABLE_SCHEMA,
+          TABLE_CATALOG,
+          ROW_COUNT,
+          BYTES
+        FROM 
+          SNOWFLAKE.ACCOUNT_USAGE.TABLES
+        ORDER BY 
+          BYTES DESC
+        LIMIT 20
+      `;
+      
+      const result = await this.executeQuery(connection, query);
+      return result.results || [];
+    } catch (error: any) {
+      throw new Error(`Failed to get account usage tables: ${error.message}`);
     }
   }
 
