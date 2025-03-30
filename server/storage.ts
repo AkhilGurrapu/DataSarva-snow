@@ -67,7 +67,7 @@ export class MemStorage implements IStorage {
     this.errorLogs = new Map();
     this.activityLogs = new Map();
     this.currentIds = {
-      user: 2, // Starting with 2 as we're creating a demo user with ID 1
+      user: 1,
       connection: 1,
       queryHistory: 1,
       etlPipeline: 1,
@@ -85,46 +85,6 @@ export class MemStorage implements IStorage {
       role: "user"
     };
     this.users.set(demoUser.id, demoUser);
-    
-    // Add demo data for this user
-    this.createDummyData(demoUser.id);
-  }
-  
-  private createDummyData(userId: number) {
-    // Add a sample connection
-    const connection: SnowflakeConnection = {
-      id: this.currentIds.connection++,
-      userId,
-      name: "Demo Snowflake Account",
-      account: "demo-account",
-      username: "demo_user",
-      password: "demo_password",
-      role: "ACCOUNTADMIN",
-      warehouse: "COMPUTE_WH",
-      isActive: true,
-      createdAt: new Date()
-    };
-    this.connections.set(connection.id, connection);
-    
-    // Create some sample activity logs
-    const activityTypes = ["CONNECTION_CREATED", "QUERY_OPTIMIZED", "PIPELINE_CREATED"];
-    const descriptions = [
-      "Created connection to Demo Snowflake Account",
-      "Query optimized successfully",
-      "Created ETL pipeline: Sample Data Pipeline"
-    ];
-    
-    for (let i = 0; i < activityTypes.length; i++) {
-      const activityLog: ActivityLog = {
-        id: this.currentIds.activityLog++,
-        userId,
-        activityType: activityTypes[i],
-        description: descriptions[i],
-        details: { sample: "data" },
-        timestamp: new Date(Date.now() - i * 86400000) // Each a day apart
-      };
-      this.activityLogs.set(activityLog.id, activityLog);
-    }
   }
 
   // User operations
