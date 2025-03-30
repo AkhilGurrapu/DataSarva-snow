@@ -32,7 +32,7 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
         setLoading(true);
         
         // Get recommendations from the Snowflake API
-        const response = await apiRequest("GET", "/api/recommendations", {});
+        const response = await apiRequest("GET", "/api/recommendations");
         
         if (response && Array.isArray(response) && response.length > 0) {
           setRecommendations(response);
