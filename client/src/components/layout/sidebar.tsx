@@ -89,23 +89,24 @@ export default function Sidebar({ activeConnection, onMobileSidebarClose, isMobi
       {/* Navigation */}
       <nav className="mt-5 px-2 space-y-1">
         {navItems.map((item) => (
-          <Link 
-            key={item.name} 
-            href={item.href}
-            onClick={handleClick}
-          >
-            <a
-              className={cn(
-                "flex items-center px-4 py-2 text-sm font-medium rounded-md group",
-                location === item.href
-                  ? "bg-primary text-white"
-                  : "text-neutral-700 hover:bg-neutral-100"
-              )}
+          <div key={item.name}>
+            <Link 
+              href={item.href}
+              onClick={handleClick}
             >
-              {item.icon}
-              {item.name}
-            </a>
-          </Link>
+              <div
+                className={cn(
+                  "flex items-center px-4 py-2 text-sm font-medium rounded-md group cursor-pointer",
+                  location === item.href
+                    ? "bg-primary text-white"
+                    : "text-neutral-700 hover:bg-neutral-100"
+                )}
+              >
+                {item.icon}
+                {item.name}
+              </div>
+            </Link>
+          </div>
         ))}
       </nav>
       

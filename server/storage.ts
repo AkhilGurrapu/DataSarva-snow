@@ -81,6 +81,7 @@ export class MemStorage implements IStorage {
       username: "demo",
       password: "password123", // In a real app, this would be hashed
       email: "demo@example.com",
+      fullName: null,
       role: "user"
     };
     this.users.set(demoUser.id, demoUser);
@@ -101,7 +102,7 @@ export class MemStorage implements IStorage {
       role: "ACCOUNTADMIN",
       warehouse: "COMPUTE_WH",
       isActive: true,
-      createdAt: new Date().toISOString()
+      createdAt: new Date()
     };
     this.connections.set(connection.id, connection);
     
@@ -120,7 +121,7 @@ export class MemStorage implements IStorage {
         activityType: activityTypes[i],
         description: descriptions[i],
         details: { sample: "data" },
-        timestamp: new Date(Date.now() - i * 86400000).toISOString() // Each a day apart
+        timestamp: new Date(Date.now() - i * 86400000) // Each a day apart
       };
       this.activityLogs.set(activityLog.id, activityLog);
     }
@@ -139,7 +140,12 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentIds.user++;
-    const user: User = { ...insertUser, id, role: "user" };
+    const user: User = { 
+      ...insertUser, 
+      id,
+      role: "user",
+      fullName: insertUser.fullName || null
+    };
     this.users.set(id, user);
     return user;
   }
@@ -159,8 +165,14 @@ export class MemStorage implements IStorage {
     const id = this.currentIds.connection++;
     const createdAt = new Date();
     const connection: SnowflakeConnection = { 
-      ...insertConnection, 
-      id, 
+      id,
+      userId: insertConnection.userId,
+      name: insertConnection.name,
+      account: insertConnection.account,
+      username: insertConnection.username,
+      password: insertConnection.password,
+      role: insertConnection.role || "ACCOUNTADMIN",
+      warehouse: insertConnection.warehouse || "COMPUTE_WH",
       isActive: false, 
       createdAt 
     };
@@ -196,7 +208,18 @@ export class MemStorage implements IStorage {
   async createQueryHistory(insertHistory: InsertQueryHistory): Promise<QueryHistory> {
     const id = this.currentIds.queryHistory++;
     const timestamp = new Date();
-    const history: QueryHistory = { ...insertHistory, id, timestamp };
+    const history: QueryHistory = { 
+      id,
+      userId: insertHistory.userId,
+      connectionId: insertHistory.connectionId,
+      originalQuery: insertHistory.originalQuery,
+      optimizedQuery: insertHistory.optimizedQuery || null,
+      executionTimeOriginal: insertHistory.executionTimeOriginal || null,
+      executionTimeOptimized: insertHistory.executionTimeOptimized || null,
+      suggestions: insertHistory.suggestions || {},
+      bytesScanned: insertHistory.bytesScanned || null,
+      timestamp
+    };
     this.queryHistories.set(id, history);
     return history;
   }
@@ -216,8 +239,17 @@ export class MemStorage implements IStorage {
     const id = this.currentIds.etlPipeline++;
     const createdAt = new Date();
     const pipeline: EtlPipeline = { 
-      ...insertPipeline, 
-      id, 
+      id,
+      name: insertPipeline.name,
+      userId: insertPipeline.userId,
+      connectionId: insertPipeline.connectionId,
+      sourceDescription: insertPipeline.sourceDescription,
+      targetDescription: insertPipeline.targetDescription,
+      pipelineCode: insertPipeline.pipelineCode,
+      status: insertPipeline.status || "INACTIVE",
+      description: insertPipeline.description || null,
+      businessRequirements: insertPipeline.businessRequirements || null,
+      schedule: insertPipeline.schedule || null,
       lastRunTime: null, 
       lastRunStatus: null, 
       createdAt 
@@ -255,8 +287,13 @@ export class MemStorage implements IStorage {
     const id = this.currentIds.errorLog++;
     const timestamp = new Date();
     const errorLog: ErrorLog = { 
-      ...insertErrorLog, 
-      id, 
+      id,
+      userId: insertErrorLog.userId,
+      connectionId: insertErrorLog.connectionId,
+      errorMessage: insertErrorLog.errorMessage,
+      errorCode: insertErrorLog.errorCode || null,
+      errorContext: insertErrorLog.errorContext || null,
+      status: insertErrorLog.status || "NEW",
       analysis: null, 
       timestamp 
     };
@@ -284,7 +321,14 @@ export class MemStorage implements IStorage {
   async createActivityLog(insertActivityLog: InsertActivityLog): Promise<ActivityLog> {
     const id = this.currentIds.activityLog++;
     const timestamp = new Date();
-    const activityLog: ActivityLog = { ...insertActivityLog, id, timestamp };
+    const activityLog: ActivityLog = {
+      id,
+      userId: insertActivityLog.userId,
+      description: insertActivityLog.description,
+      activityType: insertActivityLog.activityType,
+      details: insertActivityLog.details || {},
+      timestamp
+    };
     this.activityLogs.set(id, activityLog);
     return activityLog;
   }
