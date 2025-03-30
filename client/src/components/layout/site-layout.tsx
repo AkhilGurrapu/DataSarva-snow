@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Home, Database, Zap, GitPullRequest, LineChart, Bug, TestTube2 } from "lucide-react";
+import { useState } from "react";
 
 type SiteLayoutProps = {
   user: any;
@@ -9,6 +10,8 @@ type SiteLayoutProps = {
 };
 
 export default function SiteLayout({ user, onLogout, children, currentPath }: SiteLayoutProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
   const navItems = [
     { path: "/", label: "Dashboard", icon: Home },
     { path: "/connections", label: "Connections", icon: Database },
@@ -27,39 +30,35 @@ export default function SiteLayout({ user, onLogout, children, currentPath }: Si
           <div className="text-xl font-bold">SnowAutoPilot</div>
           <button 
             className="md:hidden text-gray-400 hover:text-white"
-            onClick={() => {
-              const sidebar = document.getElementById('sidebar-nav');
-              if (sidebar) {
-                sidebar.classList.toggle('hidden');
-              }
-            }}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         </div>
-        <div id="sidebar-nav" className="hidden md:block">
+        <div className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block`}>
           <nav className="mt-5">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <Link key={item.path} href={item.path}>
-                  <a 
-                    className={`flex items-center px-4 py-3 ${
+                  <div 
+                    className={`flex items-center px-4 py-3 cursor-pointer ${
                       currentPath === item.path
                         ? "bg-gray-800 text-blue-400 border-l-4 border-blue-400" 
                         : "text-gray-300 hover:bg-gray-800"
                     }`}
+                    onClick={() => setMobileMenuOpen(false)}
                   >
                     <Icon className="w-5 h-5 mr-3" />
                     <span>{item.label}</span>
-                  </a>
+                  </div>
                 </Link>
               );
             })}
           </nav>
-          <div className="mt-auto p-4 border-t border-gray-800">
+          <div className="p-4 border-t border-gray-800 mt-4">
             <div className="flex items-center mb-4">
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2">
                 <span className="text-white font-semibold">{user.username[0].toUpperCase()}</span>
