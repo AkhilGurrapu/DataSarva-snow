@@ -11,8 +11,7 @@ export const snowflakeClient = {
     warehouse: string;
   }) {
     try {
-      const response = await apiRequest("POST", "/api/connections", connectionParams);
-      return await response.json();
+      return await apiRequest("POST", "/api/connections", connectionParams);
     } catch (error) {
       console.error("Connection test failed:", error);
       throw new Error("Failed to test connection. Please check your credentials.");
@@ -21,15 +20,7 @@ export const snowflakeClient = {
 
   async getConnections() {
     try {
-      const response = await fetch("/api/connections", {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching connections: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", "/api/connections");
     } catch (error) {
       console.error("Failed to fetch connections:", error);
       throw new Error("Failed to fetch connections. Please try again.");
@@ -46,8 +37,7 @@ export const snowflakeClient = {
     isActive: boolean;
   }>) {
     try {
-      const response = await apiRequest("PUT", `/api/connections/${id}`, connectionParams);
-      return await response.json();
+      return await apiRequest("PUT", `/api/connections/${id}`, connectionParams);
     } catch (error) {
       console.error("Connection update failed:", error);
       throw new Error("Failed to update connection. Please try again.");
@@ -66,15 +56,7 @@ export const snowflakeClient = {
 
   async getDashboardStats() {
     try {
-      const response = await fetch("/api/dashboard/stats", {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching dashboard stats: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", "/api/dashboard/stats");
     } catch (error) {
       console.error("Failed to fetch dashboard stats:", error);
       throw new Error("Failed to fetch dashboard stats. Please try again.");
@@ -83,15 +65,7 @@ export const snowflakeClient = {
 
   async getPerformanceData(period: string = '30days') {
     try {
-      const response = await fetch(`/api/dashboard/performance-data?period=${period}`, {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching performance data: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", `/api/dashboard/performance-data?period=${period}`);
     } catch (error) {
       console.error("Failed to fetch performance data:", error);
       throw new Error("Failed to fetch performance data. Please try again.");
@@ -100,15 +74,7 @@ export const snowflakeClient = {
 
   async getActivityLogs(limit: number = 10) {
     try {
-      const response = await fetch(`/api/activity-logs?limit=${limit}`, {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching activity logs: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", `/api/activity-logs?limit=${limit}`);
     } catch (error) {
       console.error("Failed to fetch activity logs:", error);
       throw new Error("Failed to fetch activity logs. Please try again.");
@@ -117,15 +83,7 @@ export const snowflakeClient = {
 
   async getPipelines() {
     try {
-      const response = await fetch("/api/pipelines", {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching pipelines: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", "/api/pipelines");
     } catch (error) {
       console.error("Failed to fetch pipelines:", error);
       throw new Error("Failed to fetch pipelines. Please try again.");
@@ -139,8 +97,7 @@ export const snowflakeClient = {
     status: string;
   }>) {
     try {
-      const response = await apiRequest("PUT", `/api/pipelines/${id}`, pipelineParams);
-      return await response.json();
+      return await apiRequest("PUT", `/api/pipelines/${id}`, pipelineParams);
     } catch (error) {
       console.error("Pipeline update failed:", error);
       throw new Error("Failed to update pipeline. Please try again.");
@@ -159,15 +116,7 @@ export const snowflakeClient = {
 
   async getQueryHistory(limit: number = 10) {
     try {
-      const response = await fetch(`/api/query-history?limit=${limit}`, {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching query history: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", `/api/query-history?limit=${limit}`);
     } catch (error) {
       console.error("Failed to fetch query history:", error);
       throw new Error("Failed to fetch query history. Please try again.");
@@ -176,15 +125,7 @@ export const snowflakeClient = {
 
   async getErrorLogs(limit: number = 10) {
     try {
-      const response = await fetch(`/api/error-logs?limit=${limit}`, {
-        credentials: "include"
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching error logs: ${response.status}`);
-      }
-      
-      return await response.json();
+      return await apiRequest("GET", `/api/error-logs?limit=${limit}`);
     } catch (error) {
       console.error("Failed to fetch error logs:", error);
       throw new Error("Failed to fetch error logs. Please try again.");

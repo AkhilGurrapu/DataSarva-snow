@@ -4,11 +4,10 @@ import { apiRequest } from "./queryClient";
 export const openaiClient = {
   async analyzeQuery(connectionId: number, query: string) {
     try {
-      const response = await apiRequest("POST", "/api/query-optimize", {
+      return await apiRequest("POST", "/api/query-optimize", {
         connectionId,
         query
       });
-      return await response.json();
     } catch (error) {
       console.error("Query analysis failed:", error);
       throw new Error("Failed to analyze query. Please try again.");
@@ -17,13 +16,12 @@ export const openaiClient = {
 
   async analyzeError(connectionId: number, errorMessage: string, errorCode?: string, errorContext?: string) {
     try {
-      const response = await apiRequest("POST", "/api/error-analyze", {
+      return await apiRequest("POST", "/api/error-analyze", {
         connectionId,
         errorMessage,
         errorCode,
         errorContext
       });
-      return await response.json();
     } catch (error) {
       console.error("Error analysis failed:", error);
       throw new Error("Failed to analyze error. Please try again.");
@@ -40,7 +38,7 @@ export const openaiClient = {
     schedule: string
   ) {
     try {
-      const response = await apiRequest("POST", "/api/pipelines", {
+      return await apiRequest("POST", "/api/pipelines", {
         connectionId,
         name,
         description,
@@ -50,7 +48,6 @@ export const openaiClient = {
         schedule,
         status: "paused" // Default status for new pipelines
       });
-      return await response.json();
     } catch (error) {
       console.error("ETL pipeline generation failed:", error);
       throw new Error("Failed to generate ETL pipeline. Please try again.");

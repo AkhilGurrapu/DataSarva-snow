@@ -36,8 +36,7 @@ export default function Login({ onLogin }: LoginProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const response = await apiRequest("POST", "/api/auth/login", values);
-      const data = await response.json();
+      const data = await apiRequest("POST", "/api/auth/login", values);
       
       toast({
         title: "Login successful",
