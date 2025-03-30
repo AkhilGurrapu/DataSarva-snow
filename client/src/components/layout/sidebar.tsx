@@ -9,16 +9,20 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
-  LayoutDashboard
+  LayoutDashboard,
+  Link as LinkIcon,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useState } from "react";
+import { useConnection } from "@/hooks/use-connection";
 
 type SidebarProps = {
   currentPath: string;
 };
 
 export default function Sidebar({ currentPath }: SidebarProps) {
+  const { activeConnection, loading } = useConnection();
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
     "/dashboards": currentPath.startsWith("/dashboards")
   });
@@ -46,8 +50,36 @@ export default function Sidebar({ currentPath }: SidebarProps) {
       ]
     },
     { path: "/query-advisor", label: "Query Advisor", icon: MessageSquareText },
+    { path: "/connections", label: "Connections", icon: LinkIcon },
     { path: "/documentation", label: "Documentation", icon: FileText },
   ];
+
+  const connectionStatus = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center text-gray-400">
+          <div className="h-2 w-2 rounded-full bg-yellow-400 mr-2 animate-pulse"></div>
+          Connecting...
+        </div>
+      );
+    }
+    
+    if (activeConnection) {
+      return (
+        <div className="flex items-center text-gray-400">
+          <div className="h-2 w-2 rounded-full bg-green-400 mr-2"></div>
+          {activeConnection.name}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="flex items-center text-gray-400">
+        <div className="h-2 w-2 rounded-full bg-red-400 mr-2"></div>
+        Not connected
+      </div>
+    );
+  };
 
   return (
     <div className="w-64 h-full bg-gray-900 text-white flex flex-col">
@@ -113,14 +145,19 @@ export default function Sidebar({ currentPath }: SidebarProps) {
                 >
                   <Icon className="w-5 h-5 mr-3" />
                   <span>{item.label}</span>
+                  {item.path === "/connections" && !activeConnection && !loading && (
+                    <AlertCircle className="ml-auto h-4 w-4 text-red-400" />
+                  )}
                 </Link>
               )}
             </div>
           );
         })}
       </nav>
-      <div className="p-4 border-t border-gray-800 text-xs text-gray-500">
-        v1.0.0 | Connected to Snowflake
+      <div className="p-4 border-t border-gray-800">
+        <div className="text-xs font-medium mb-1">Connection Status</div>
+        {connectionStatus()}
+        <div className="text-xs text-gray-500 mt-2">v1.0.0</div>
       </div>
     </div>
   );

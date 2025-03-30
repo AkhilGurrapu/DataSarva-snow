@@ -13,6 +13,10 @@ import Login from "@/pages/login";
 import { useEffect, useState } from "react";
 import { apiRequest } from "./lib/queryClient";
 
+// Connection Context
+import { ConnectionProvider } from "@/hooks/use-connection";
+import { ConnectionRequiredWrapper } from "@/components/connection-required-wrapper";
+
 // New Slingshot UI Components
 import Home from "@/pages/home";
 import Warehouses from "@/pages/warehouses";
@@ -71,26 +75,79 @@ function AuthRouter() {
   }
 
   return (
-    <Switch>
-      {/* Slingshot UI Routes */}
-      <Route path="/" component={() => <Home user={user} onLogout={handleLogout} />} />
-      <Route path="/warehouses" component={() => <Warehouses user={user} onLogout={handleLogout} />} />
-      <Route path="/create-warehouse" component={() => <CreateWarehouse user={user} onLogout={handleLogout} />} />
-      <Route path="/recommendations" component={() => <Recommendations user={user} onLogout={handleLogout} />} />
-      <Route path="/query-advisor" component={() => <QueryAdvisor user={user} onLogout={handleLogout} />} />
-      <Route path="/dashboards/cost" component={() => <CostDashboard user={user} onLogout={handleLogout} />} />
-      <Route path="/dashboards/performance" component={() => <PerformanceDashboard user={user} onLogout={handleLogout} />} />
-      
-      {/* Legacy UI Routes */}
-      <Route path="/old-dashboard" component={() => <Dashboard user={user} onLogout={handleLogout} />} />
-      <Route path="/connections" component={() => <Connections user={user} onLogout={handleLogout} />} />
-      <Route path="/query-optimizer" component={() => <QueryOptimizer user={user} onLogout={handleLogout} />} />
-      <Route path="/performance" component={() => <Performance user={user} onLogout={handleLogout} />} />
-      <Route path="/debugging" component={() => <Debugging user={user} onLogout={handleLogout} />} />
-      <Route path="/snowflake-test" component={() => <SnowflakeTest user={user} onLogout={handleLogout} />} />
-      <Route path="/login" component={() => <Login onLogin={setUser} />} />
-      <Route component={NotFound} />
-    </Switch>
+    <ConnectionProvider>
+      <Switch>
+        {/* Connection management (always accessible) */}
+        <Route path="/connections" component={() => <Connections user={user} onLogout={handleLogout} />} />
+        
+        {/* Routes that require an active Snowflake connection */}
+        <Route path="/" component={() => (
+          <ConnectionRequiredWrapper>
+            <Home user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/warehouses" component={() => (
+          <ConnectionRequiredWrapper>
+            <Warehouses user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/create-warehouse" component={() => (
+          <ConnectionRequiredWrapper>
+            <CreateWarehouse user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/recommendations" component={() => (
+          <ConnectionRequiredWrapper>
+            <Recommendations user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/query-advisor" component={() => (
+          <ConnectionRequiredWrapper>
+            <QueryAdvisor user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/dashboards/cost" component={() => (
+          <ConnectionRequiredWrapper>
+            <CostDashboard user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/dashboards/performance" component={() => (
+          <ConnectionRequiredWrapper>
+            <PerformanceDashboard user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        
+        {/* Legacy UI Routes */}
+        <Route path="/old-dashboard" component={() => (
+          <ConnectionRequiredWrapper>
+            <Dashboard user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/query-optimizer" component={() => (
+          <ConnectionRequiredWrapper>
+            <QueryOptimizer user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/performance" component={() => (
+          <ConnectionRequiredWrapper>
+            <Performance user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/debugging" component={() => (
+          <ConnectionRequiredWrapper>
+            <Debugging user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/snowflake-test" component={() => (
+          <ConnectionRequiredWrapper>
+            <SnowflakeTest user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        
+        <Route path="/login" component={() => <Login onLogin={setUser} />} />
+        <Route component={NotFound} />
+      </Switch>
+    </ConnectionProvider>
   );
 }
 
