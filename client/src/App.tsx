@@ -6,7 +6,6 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Connections from "@/pages/connections";
 import QueryOptimizer from "@/pages/query-optimizer";
-import EtlWorkflows from "@/pages/etl-workflows";
 import Performance from "@/pages/performance";
 import Debugging from "@/pages/debugging";
 import SnowflakeTest from "@/pages/snowflake-test";
@@ -19,6 +18,7 @@ import Home from "@/pages/home";
 import Warehouses from "@/pages/warehouses";
 import CreateWarehouse from "@/pages/create-warehouse";
 import QueryAdvisor from "@/pages/query-advisor";
+import Recommendations from "@/pages/recommendations";
 import CostDashboard from "@/pages/dashboards/cost";
 import PerformanceDashboard from "@/pages/dashboards/performance";
 
@@ -76,6 +76,7 @@ function AuthRouter() {
       <Route path="/" component={() => <Home user={user} onLogout={handleLogout} />} />
       <Route path="/warehouses" component={() => <Warehouses user={user} onLogout={handleLogout} />} />
       <Route path="/create-warehouse" component={() => <CreateWarehouse user={user} onLogout={handleLogout} />} />
+      <Route path="/recommendations" component={() => <Recommendations user={user} onLogout={handleLogout} />} />
       <Route path="/query-advisor" component={() => <QueryAdvisor user={user} onLogout={handleLogout} />} />
       <Route path="/dashboards/cost" component={() => <CostDashboard user={user} onLogout={handleLogout} />} />
       <Route path="/dashboards/performance" component={() => <PerformanceDashboard user={user} onLogout={handleLogout} />} />
@@ -84,7 +85,6 @@ function AuthRouter() {
       <Route path="/old-dashboard" component={() => <Dashboard user={user} onLogout={handleLogout} />} />
       <Route path="/connections" component={() => <Connections user={user} onLogout={handleLogout} />} />
       <Route path="/query-optimizer" component={() => <QueryOptimizer user={user} onLogout={handleLogout} />} />
-      <Route path="/etl-workflows" component={() => <EtlWorkflows user={user} onLogout={handleLogout} />} />
       <Route path="/performance" component={() => <Performance user={user} onLogout={handleLogout} />} />
       <Route path="/debugging" component={() => <Debugging user={user} onLogout={handleLogout} />} />
       <Route path="/snowflake-test" component={() => <SnowflakeTest user={user} onLogout={handleLogout} />} />

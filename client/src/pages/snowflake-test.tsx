@@ -22,7 +22,12 @@ export default function SnowflakeTest({ user, onLogout }: SnowflakeTestProps) {
     try {
       const response = await apiRequest('GET', '/api/snowflake/account-usage/tables');
       
-      setResult(response);
+      if (response && Array.isArray(response)) {
+        setResult(response);
+      } else {
+        setResult([]);
+        setError('Invalid response format');
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred while fetching Snowflake data');
       console.error('Error fetching Snowflake data:', err);

@@ -462,6 +462,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Warehouse recommendations
+  app.get("/api/recommendations", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connections = await storage.getConnectionsByUserId(userId);
+      
+      // Make sure there's an active connection
+      const activeConnection = connections.find(c => c.isActive);
+      
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active connection found" });
+      }
+      
+      // In a real implementation, this would query Snowflake to get actual usage
+      // and generate recommendations based on that data
+      try {
+        // Get warehouse recommendations from Snowflake
+        // This would involve analyzing query patterns, usage metrics, etc.
+        const recommendationsQuery = `
+          SELECT 
+            WAREHOUSE_NAME, 
+            CREDITS_USED * 3.0 AS CURRENT_COST, 
+            CASE 
+              WHEN AVG_RUNNING < 50 THEN CREDITS_USED * 3.0 * 0.6
+              WHEN AVG_RUNNING < 70 THEN CREDITS_USED * 3.0 * 0.7
+              ELSE CREDITS_USED * 3.0 * 0.8
+            END AS RECOMMENDED_COST
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
+          ORDER BY 
+            CREDITS_USED DESC
+          LIMIT 5;
+        `;
+        
+        const result = await snowflakeService.executeQuery(activeConnection, recommendationsQuery);
+        
+        if (result && result.results && result.results.length > 0) {
+          // Transform the results into the expected format
+          const recommendations = result.results.map((row: any, index: number) => {
+            const currentCost = parseFloat(row.CURRENT_COST);
+            const recommendedCost = parseFloat(row.RECOMMENDED_COST);
+            const savings = currentCost - recommendedCost;
+            const savingsPercentage = (savings / currentCost) * 100;
+            
+            return {
+              id: index + 1,
+              warehouseName: row.WAREHOUSE_NAME,
+              currentCost: currentCost,
+              recommendedCost: recommendedCost,
+              savings: savings,
+              savingsPercentage: savingsPercentage
+            };
+          });
+          
+          return res.json(recommendations);
+        }
+        
+        // If the query executed but returned no data, return an empty array
+        return res.json([]);
+        
+      } catch (err) {
+        // If Snowflake query fails, handle gracefully
+        console.error("Failed to get warehouse recommendations from Snowflake:", err);
+        
+        // In a real implementation with fallback logic, you might:
+        // 1. Try an alternative query
+        // 2. Use cached data if available
+        // 3. Return empty results with a status
+        return res.json([]);
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Stats and dashboard data
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {

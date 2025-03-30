@@ -29,57 +29,26 @@ export default function Home({ user, onLogout }: HomeProps) {
     async function fetchData() {
       try {
         setLoading(true);
-        // This would be a real API call in production
-        // For now we'll create mock data that matches the mockups
-        const mockRecommendations = [
-          { 
-            id: 1, 
-            warehouseName: "Nexus_6_WH_1", 
-            currentCost: 5672.70, 
-            recommendedCost: 4582.40, 
-            savings: 1090.30,
-            savingsPercentage: 19.22
-          },
-          { 
-            id: 2, 
-            warehouseName: "Nexus_6_WH_3", 
-            currentCost: 1440.00, 
-            recommendedCost: 900.73, 
-            savings: 539.27,
-            savingsPercentage: 37.45
-          },
-          { 
-            id: 3, 
-            warehouseName: "Alpha_WH_5", 
-            currentCost: 8290.38, 
-            recommendedCost: 5684.73, 
-            savings: 2605.65,
-            savingsPercentage: 31.43
-          },
-          { 
-            id: 4, 
-            warehouseName: "Nexus_6_WH_7", 
-            currentCost: 1440.00, 
-            recommendedCost: 864.00, 
-            savings: 576.00,
-            savingsPercentage: 40
-          },
-          { 
-            id: 5, 
-            warehouseName: "Nexus_6_WH_5", 
-            currentCost: 432.17, 
-            recommendedCost: 259.23, 
-            savings: 172.94,
-            savingsPercentage: 40.02
-          }
-        ];
         
-        setRecommendations(mockRecommendations);
+        // Get recommendations from the Snowflake API
+        const response = await apiRequest("GET", "/api/recommendations", {});
         
-        const total = mockRecommendations.reduce((acc, rec) => acc + rec.savings, 0);
-        setTotalSavings(total);
+        if (response && Array.isArray(response) && response.length > 0) {
+          setRecommendations(response);
+          
+          // Calculate total savings from real recommendations
+          const total = response.reduce((acc, rec) => acc + (rec.savings || 0), 0);
+          setTotalSavings(total);
+        } else {
+          // If no recommendations are available, set empty state
+          setRecommendations([]);
+          setTotalSavings(0);
+        }
       } catch (error) {
         console.error("Failed to fetch recommendations:", error);
+        // On error, clear data and show empty state
+        setRecommendations([]);
+        setTotalSavings(0);
       } finally {
         setLoading(false);
       }
@@ -140,10 +109,8 @@ export default function Home({ user, onLogout }: HomeProps) {
                   These are savings that your entire org is leaving on 
                   the table by ignoring your top recommendations.
                 </p>
-                <Link href="/recommendations">
-                  <a className="text-blue-600 hover:text-blue-700 font-medium text-sm">
-                    Go to all savings recommendations
-                  </a>
+                <Link href="/recommendations" className="text-blue-600 hover:text-blue-700 font-medium text-sm">
+                  Go to all savings recommendations
                 </Link>
               </CardContent>
             </Card>
@@ -173,10 +140,8 @@ export default function Home({ user, onLogout }: HomeProps) {
                   </div>
                 ))}
                 <div className="mt-4">
-                  <Link href="/recommendations">
-                    <a className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center">
-                      Go to all recommendations <ArrowRight className="ml-1 w-4 h-4" />
-                    </a>
+                  <Link href="/recommendations" className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center">
+                    Go to all recommendations <ArrowRight className="ml-1 w-4 h-4" />
                   </Link>
                 </div>
               </CardContent>
@@ -187,9 +152,7 @@ export default function Home({ user, onLogout }: HomeProps) {
         <div>
           <p className="text-sm text-gray-600">
             <span className="font-medium">Note:</span> There are queries that run on warehouses across your organization - can be optimized using 
-            <Link href="/query-advisor">
-              <a className="text-blue-600 hover:underline mx-1">query advisor</a>
-            </Link>.
+            <Link href="/query-advisor" className="text-blue-600 hover:underline mx-1">query advisor</Link>.
           </p>
         </div>
       </div>
