@@ -11,95 +11,281 @@ import {
   ChevronRight,
   Download,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Loader2
 } from "lucide-react";
 import { apiRequest } from "../../lib/queryClient";
 import { Link } from "wouter";
+import { snowflakeClient } from "../../lib/snowflake";
+import { useConnection } from "../../hooks/use-connection";
 
 type PerformanceDashboardProps = {
   user: any;
   onLogout: () => void;
 };
 
+interface WarehousePerformanceData {
+  warehouseName: string;
+  warehouseSize: string;
+  metrics: {
+    totalQueries: number;
+    avgExecutionTime: number;
+    totalCredits: number;
+    currentCost: number;
+    recommendedCost: number;
+    savings: number;
+    savingsPercentage: number;
+    recommendation: string;
+  };
+  chartData: {
+    date: string;
+    queryCount: number;
+    avgExecutionTime: string;
+    totalExecutionTime: string;
+    avgGbScanned: string;
+    creditsUsed: string;
+    cost: string;
+  }[];
+}
+
 export default function PerformanceDashboard({ user, onLogout }: PerformanceDashboardProps) {
-  const [selectedWarehouse, setSelectedWarehouse] = useState("Nexus_6_WH_3");
-  const [selectedPeriod, setSelectedPeriod] = useState("90days");
+  const { activeConnection } = useConnection();
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState("30days");
+  const [loading, setLoading] = useState(false);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [performanceData, setPerformanceData] = useState<WarehousePerformanceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [currentMetrics, setCurrentMetrics] = useState({
     queryExecutionTime: {
-      current: 13.69,
-      recommended: 16.97,
-      change: -3.28,
+      current: 0,
+      recommended: 0, 
+      change: 0,
       unit: "sec"
     },
     monthlyCost: {
-      current: 5672.70,
-      recommended: 4582.40,
-      change: 1090.30,
+      current: 0,
+      recommended: 0,
+      change: 0,
       unit: "$"
     }
   });
   
-  // Mock chart data - this would come from the API in a real app
+  // Fetch warehouses when component mounts
+  useEffect(() => {
+    async function fetchWarehouses() {
+      if (!activeConnection) return;
+      
+      try {
+        setLoading(true);
+        const data = await snowflakeClient.getWarehouses();
+        if (data && data.length > 0) {
+          setWarehouses(data);
+          setSelectedWarehouse(data[0].name || data[0]["name"]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch warehouses:", err);
+        setError("Failed to load warehouses. Please check your connection.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchWarehouses();
+  }, [activeConnection]);
+  
+  // Fetch performance data when selectedWarehouse or period changes
+  useEffect(() => {
+    async function fetchPerformanceData() {
+      if (!selectedWarehouse) return;
+      
+      try {
+        setLoading(true);
+        const data = await snowflakeClient.getWarehousePerformance(selectedWarehouse, selectedPeriod);
+        setPerformanceData(data);
+        
+        // Set metrics based on real data
+        if (data && data.metrics) {
+          const { avgExecutionTime, currentCost, recommendedCost, recommendation } = data.metrics;
+          const costChange = currentCost - recommendedCost;
+          const perfImpact = recommendation?.includes("Downsize") ? avgExecutionTime * 0.15 : 0; // Estimate 15% increase if downsizing
+          
+          setCurrentMetrics({
+            queryExecutionTime: {
+              current: parseFloat(avgExecutionTime.toFixed(2)),
+              recommended: parseFloat((avgExecutionTime + perfImpact).toFixed(2)),
+              change: -perfImpact,
+              unit: "sec"
+            },
+            monthlyCost: {
+              current: currentCost,
+              recommended: recommendedCost,
+              change: costChange,
+              unit: "$"
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch warehouse performance data:", err);
+        setError("Failed to load performance data. Please check your connection.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    if (selectedWarehouse) {
+      fetchPerformanceData();
+    }
+  }, [selectedWarehouse, selectedPeriod]);
+  
+  // Chart data from API
   const chartData = {
-    labels: Array.from({ length: 31 }, (_, i) => `${i + 1}`),
+    labels: performanceData?.chartData?.map(item => item.date.split('-')[2]) || [],
     datasets: [
       {
-        label: "Query Duration (ms)",
-        data: Array.from({ length: 31 }, () => Math.floor(Math.random() * 100) + 50)
+        label: "Average Query Execution Time (s)",
+        data: performanceData?.chartData?.map(item => parseFloat(item.avgExecutionTime)) || []
       }
     ]
   };
 
+  // Render the dashboard
   return (
     <MainLayout user={user} onLogout={onLogout}>
       <div className="flex flex-col space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-medium text-gray-800">Recommendation for {selectedWarehouse}</h1>
+        {/* Loading state */}
+        {loading && (
+          <div className="flex justify-center items-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-2">Loading warehouse data...</span>
           </div>
-          
-          <div className="flex gap-2">
-            <Button variant="outline">
-              Export as CSV
-            </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              Apply recommendation
-            </Button>
-          </div>
-        </div>
+        )}
         
-        <div>
+        {/* Error state */}
+        {error && (
+          <Card className="bg-red-50 border-red-200">
+            <CardContent className="p-4">
+              <div className="text-red-600">{error}</div>
+              <div className="text-sm mt-2">
+                Please check your Snowflake connection and make sure you have the appropriate permissions.
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Header with filters */}
+        {!loading && !error && (
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-medium text-gray-800">
+                {selectedWarehouse 
+                  ? `Recommendation for ${selectedWarehouse}` 
+                  : "Select a warehouse to see recommendations"}
+              </h1>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Select 
+                  value={selectedWarehouse || ""}
+                  onValueChange={(value) => setSelectedWarehouse(value)}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select warehouse" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem 
+                        key={warehouse.name || warehouse["name"]} 
+                        value={warehouse.name || warehouse["name"]}
+                      >
+                        {warehouse.name || warehouse["name"]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Select 
+                  value={selectedPeriod}
+                  onValueChange={(value) => setSelectedPeriod(value)}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Select period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30days">30 days</SelectItem>
+                    <SelectItem value="60days">60 days</SelectItem>
+                    <SelectItem value="90days">90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button variant="outline">
+                  Export as CSV
+                </Button>
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={!performanceData || !performanceData.metrics?.recommendation}
+                >
+                  Apply recommendation
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Main content */}
+        {selectedWarehouse && !loading && !error && (
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col space-y-8">
-                <div>
-                  <h2 className="text-lg font-semibold mb-2">Why we recommend this</h2>
-                  <div className="flex items-start space-x-2 mb-4">
-                    <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 mt-0.5">
-                      Reduce cost by keeping down performance
-                    </Badge>
+                {/* Recommendation section */}
+                {performanceData && performanceData.metrics?.recommendation ? (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-2">Why we recommend this</h2>
+                    <div className="flex items-start space-x-2 mb-4">
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 mt-0.5">
+                        {performanceData.metrics.recommendation}
+                      </Badge>
+                    </div>
+                    <p className="text-gray-600 mb-4">
+                      Based on data analysis from {performanceData.metrics.totalQueries || 0} queries 
+                      on warehouse {performanceData.warehouseName}, we can save approximately 
+                      ${performanceData.metrics.savings?.toFixed(2) || 0} ({performanceData.metrics.savingsPercentage?.toFixed(1) || 0}%)
+                      by making the recommended changes.
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                        {performanceData.metrics.currentCost > performanceData.metrics.recommendedCost 
+                          ? "High cost trends" 
+                          : "Low cost efficiency"}
+                      </Badge>
+                      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                        {performanceData.metrics.totalCredits > 100 
+                          ? "High credit consumption" 
+                          : "Low credit utilization"}
+                      </Badge>
+                      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                        {performanceData.metrics.avgExecutionTime < 10 
+                          ? "Low query complexity" 
+                          : "Complex queries"}
+                      </Badge>
+                      <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                        {performanceData.metrics.recommendation.includes("Downsize") 
+                          ? "Excess memory allocation" 
+                          : "Resource constraints"}
+                      </Badge>
+                    </div>
                   </div>
-                  <p className="text-gray-600 mb-4">
-                    Based on test data running on this warehouse and assessing around 1000's query time, latency, 
-                    and memory_limit, we recommend this down-sizing - you'll save money without impacting performance.
-                  </p>
-                  
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
-                      High cost trends
-                    </Badge>
-                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
-                      High credit consumption
-                    </Badge>
-                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
-                      Low query complexity
-                    </Badge>
-                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
-                      Excess memory allocation
-                    </Badge>
+                ) : (
+                  <div className="text-center p-8 text-gray-500">
+                    No recommendation data available for this warehouse.
                   </div>
-                </div>
+                )}
                 
+                {/* Metrics comparison */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div>
                     <h3 className="text-base font-medium mb-2 text-gray-700">Avg query execution</h3>
@@ -138,6 +324,7 @@ export default function PerformanceDashboard({ user, onLogout }: PerformanceDash
                   </div>
                 </div>
                 
+                {/* Tabs for more details */}
                 <div>
                   <Tabs defaultValue="settings">
                     <TabsList className="mb-6">
@@ -243,13 +430,13 @@ export default function PerformanceDashboard({ user, onLogout }: PerformanceDash
                             <div className="absolute inset-0 flex items-end justify-start space-x-1">
                               {chartData.labels.map((label, index) => (
                                 <div 
-                                  key={label} 
+                                  key={label || index} 
                                   className="w-8 flex flex-col items-center"
                                 >
                                   <div 
                                     className="w-6 bg-blue-500 rounded-t"
                                     style={{ 
-                                      height: `${chartData.datasets[0].data[index] / 2}px`,
+                                      height: `${(chartData.datasets[0].data[index] || 0) / 2}px`,
                                       opacity: index % 3 === 0 ? 0.9 : index % 3 === 1 ? 0.7 : 0.5
                                     }}
                                   ></div>
@@ -270,7 +457,7 @@ export default function PerformanceDashboard({ user, onLogout }: PerformanceDash
               </div>
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
     </MainLayout>
   );

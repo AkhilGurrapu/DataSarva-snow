@@ -148,5 +148,14 @@ export const snowflakeClient = {
       console.error("Failed to fetch recommendations:", error);
       throw new Error("Failed to fetch recommendations. Please try again.");
     }
+  },
+  
+  async getWarehousePerformance(warehouseName: string, period: string = '30days') {
+    try {
+      return await apiRequest("GET", `/api/warehouse-performance/${warehouseName}?period=${period}`);
+    } catch (error) {
+      console.error("Failed to fetch warehouse performance data:", error);
+      throw new Error("Failed to fetch warehouse performance data. Please try again.");
+    }
   }
 };

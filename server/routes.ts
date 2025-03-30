@@ -487,6 +487,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: err.message });
     }
   });
+  
+  // Get detailed performance data for a specific warehouse
+  app.get("/api/warehouse-performance/:warehouseName", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const warehouseName = req.params.warehouseName;
+      const period = req.query.period || '30days';
+      
+      if (!warehouseName) {
+        return res.status(400).json({ message: "Warehouse name is required" });
+      }
+      
+      const connections = await storage.getConnectionsByUserId(userId);
+      const activeConnection = connections.find(c => c.isActive);
+      
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active connection found" });
+      }
+      
+      try {
+        // Set the role to ACCOUNTADMIN for permissions
+        await snowflakeService.executeQuery(activeConnection, "USE ROLE ACCOUNTADMIN");
+        
+        // Get warehouse details
+        const warehouseDetailsQuery = `SHOW WAREHOUSES LIKE '${warehouseName}'`;
+        const warehouseDetails = await snowflakeService.executeQuery(activeConnection, warehouseDetailsQuery);
+        
+        if (!warehouseDetails.results || warehouseDetails.results.length === 0) {
+          return res.status(404).json({ message: "Warehouse not found" });
+        }
+        
+        // Get query history for this warehouse
+        const daysPeriod = period === '90days' ? 90 : period === '60days' ? 60 : 30;
+        
+        const queryHistoryQuery = `
+          SELECT 
+            TO_VARCHAR(DATE_TRUNC('DAY', START_TIME), 'YYYY-MM-DD') as DATE,
+            COUNT(*) as QUERY_COUNT,
+            AVG(EXECUTION_TIME) / 1000 as AVG_EXECUTION_TIME_SECONDS,
+            SUM(EXECUTION_TIME) / 1000 as TOTAL_EXECUTION_TIME_SECONDS,
+            AVG(BYTES_SCANNED) / (1024 * 1024 * 1024) as AVG_GB_SCANNED
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -${daysPeriod}, CURRENT_TIMESTAMP())
+            AND WAREHOUSE_NAME ILIKE '${warehouseName}'
+          GROUP BY 
+            DATE
+          ORDER BY 
+            DATE ASC
+        `;
+        
+        const queryHistoryResult = await snowflakeService.executeQuery(activeConnection, queryHistoryQuery);
+        
+        // Get credit usage data
+        const creditQuery = `
+          SELECT 
+            TO_VARCHAR(DATE_TRUNC('DAY', START_TIME), 'YYYY-MM-DD') as DATE,
+            SUM(CREDITS_USED) as CREDITS_USED
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -${daysPeriod}, CURRENT_TIMESTAMP())
+            AND WAREHOUSE_NAME ILIKE '${warehouseName}'
+          GROUP BY 
+            DATE
+          ORDER BY 
+            DATE ASC
+        `;
+        
+        const creditResult = await snowflakeService.executeQuery(activeConnection, creditQuery);
+        
+        // Calculate metrics for this warehouse
+        const warehouse = warehouseDetails.results[0];
+        const warehouseSize = warehouse.size || warehouse["size"] || "X-Small";
+        
+        // Calculate total credits used
+        const totalCredits = (creditResult.results && creditResult.results.length > 0)
+          ? creditResult.results.reduce((sum: number, day: any) => {
+              return sum + Number(day.CREDITS_USED || day["CREDITS_USED"] || 0);
+            }, 0)
+          : 0;
+        
+        // Calculate average execution time
+        const avgExecTime = (queryHistoryResult.results && queryHistoryResult.results.length > 0) 
+          ? queryHistoryResult.results.reduce((sum: number, day: any) => {
+              return sum + Number(day.AVG_EXECUTION_TIME_SECONDS || day["AVG_EXECUTION_TIME_SECONDS"] || 0);
+            }, 0) / queryHistoryResult.results.length 
+          : 0;
+        
+        // Calculate query count
+        const totalQueries = (queryHistoryResult.results && queryHistoryResult.results.length > 0)
+          ? queryHistoryResult.results.reduce((sum: number, day: any) => {
+              return sum + Number(day.QUERY_COUNT || day["QUERY_COUNT"] || 0);
+            }, 0)
+          : 0;
+        
+        // Generate recommendation based on usage patterns
+        const currentCost = totalCredits * 3; // Assuming $3 per credit
+        let recommendedCost = currentCost;
+        let recommendation = "";
+        
+        const sizeMap: Record<string, { cost: number, index: number }> = {
+          "X-Small": { cost: 1, index: 0 },
+          "Small": { cost: 2, index: 1 },
+          "Medium": { cost: 4, index: 2 },
+          "Large": { cost: 8, index: 3 },
+          "X-Large": { cost: 16, index: 4 },
+          "2X-Large": { cost: 32, index: 5 },
+          "3X-Large": { cost: 64, index: 6 },
+          "4X-Large": { cost: 128, index: 7 }
+        };
+        
+        // Generate a recommendation based on usage pattern
+        const currentSizeInfo = sizeMap[warehouseSize];
+        
+        if (currentSizeInfo && totalQueries < 100 && currentSizeInfo.index > 0) {
+          // Recommend downsizing if low query count and not already smallest size
+          const sizes = Object.keys(sizeMap);
+          const newSizeKey = sizes[currentSizeInfo.index - 1];
+          const newSizeCost = sizeMap[newSizeKey].cost;
+          
+          recommendedCost = currentCost * (newSizeCost / currentSizeInfo.cost);
+          recommendation = `Downsize from ${warehouseSize} to ${newSizeKey}`;
+        } else if (totalQueries < 50) {
+          // Recommend auto-suspend if very low query count
+          recommendedCost = currentCost * 0.7;
+          recommendation = "Configure auto-suspend to reduce idle time";
+        }
+        
+        // Calculate potential savings
+        const savings = currentCost - recommendedCost;
+        const savingsPercentage = (savings / currentCost) * 100;
+        
+        // Format chart data
+        const chartData = (queryHistoryResult.results && queryHistoryResult.results.length > 0)
+          ? queryHistoryResult.results.map((day: any) => {
+              const date = day.DATE || day["DATE"];
+              const creditDay = creditResult.results?.find((c: any) => 
+                (c.DATE || c["DATE"]) === date
+              );
+              
+              return {
+                date,
+                queryCount: Number(day.QUERY_COUNT || day["QUERY_COUNT"] || 0),
+                avgExecutionTime: Number(day.AVG_EXECUTION_TIME_SECONDS || day["AVG_EXECUTION_TIME_SECONDS"] || 0).toFixed(2),
+                totalExecutionTime: Number(day.TOTAL_EXECUTION_TIME_SECONDS || day["TOTAL_EXECUTION_TIME_SECONDS"] || 0).toFixed(2),
+                avgGbScanned: Number(day.AVG_GB_SCANNED || day["AVG_GB_SCANNED"] || 0).toFixed(2),
+                creditsUsed: Number(creditDay?.CREDITS_USED || creditDay?.["CREDITS_USED"] || 0).toFixed(2),
+                cost: (Number(creditDay?.CREDITS_USED || creditDay?.["CREDITS_USED"] || 0) * 3).toFixed(2)
+              };
+            })
+          : [];
+        
+        const response = {
+          warehouseName,
+          warehouseSize,
+          metrics: {
+            totalQueries,
+            avgExecutionTime: avgExecTime,
+            totalCredits,
+            currentCost,
+            recommendedCost,
+            savings,
+            savingsPercentage,
+            recommendation
+          },
+          chartData
+        };
+        
+        return res.json(response);
+      } catch (err: any) {
+        console.error("Failed to get warehouse performance data:", err);
+        return res.status(500).json({ message: `Snowflake error: ${err.message}` });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // Warehouse recommendations
   app.get("/api/recommendations", isAuthenticated, async (req, res) => {

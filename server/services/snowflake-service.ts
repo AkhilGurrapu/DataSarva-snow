@@ -275,7 +275,9 @@ class SnowflakeService {
       normalizedQuery.includes("delete") ||
       normalizedQuery.includes("create") ||
       normalizedQuery.includes("drop") ||
-      normalizedQuery.includes("alter")
+      normalizedQuery.includes("alter") ||
+      normalizedQuery.includes("show") ||
+      normalizedQuery.includes("use")
     );
   }
 }
