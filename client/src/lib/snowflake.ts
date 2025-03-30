@@ -130,5 +130,23 @@ export const snowflakeClient = {
       console.error("Failed to fetch error logs:", error);
       throw new Error("Failed to fetch error logs. Please try again.");
     }
+  },
+  
+  async getWarehouses() {
+    try {
+      return await apiRequest("GET", "/api/warehouses");
+    } catch (error) {
+      console.error("Failed to fetch warehouses:", error);
+      throw new Error("Failed to fetch warehouses. Please try again.");
+    }
+  },
+  
+  async getRecommendations() {
+    try {
+      return await apiRequest("GET", "/api/recommendations");
+    } catch (error) {
+      console.error("Failed to fetch recommendations:", error);
+      throw new Error("Failed to fetch recommendations. Please try again.");
+    }
   }
 };

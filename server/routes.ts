@@ -462,6 +462,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Warehouse routes
+  app.get("/api/warehouses", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connections = await storage.getConnectionsByUserId(userId);
+      
+      // Make sure there's an active connection
+      const activeConnection = connections.find(c => c.isActive);
+      
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active connection found" });
+      }
+      
+      try {
+        // Get warehouse data from Snowflake
+        const warehouses = await snowflakeService.getWarehouses(activeConnection);
+        return res.json(warehouses);
+      } catch (err: any) {
+        console.error("Failed to get warehouses from Snowflake:", err);
+        return res.status(500).json({ message: `Snowflake error: ${err.message}` });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Warehouse recommendations
   app.get("/api/recommendations", isAuthenticated, async (req, res) => {
     try {

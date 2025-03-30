@@ -194,6 +194,34 @@ class SnowflakeService {
     }
   }
 
+  async getWarehouses(connection: SnowflakeConnection): Promise<any[]> {
+    try {
+      const query = `
+        SELECT 
+          WAREHOUSE_NAME as name,
+          ORGANIZATION_NAME as org,
+          ACCOUNT_NAME as account,
+          SIZE as size,
+          MIN_CLUSTER_COUNT || ' to ' || MAX_CLUSTER_COUNT as cluster,
+          CREDITS_USED * 3.0 as maxMonthlyCost,
+          CASE WHEN AUTO_SUSPEND > 0 THEN true ELSE false END as isManaged,
+          'Owner' as yourRole,
+          STATE as state,
+          TO_CHAR(CREATED_ON, 'YYYY-MM-DD') as lastUpdated,
+          WAREHOUSE_ID as id
+        FROM 
+          SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSES
+        ORDER BY 
+          CREDITS_USED DESC
+      `;
+      
+      const result = await this.executeQuery(connection, query);
+      return result.results || [];
+    } catch (error: any) {
+      throw new Error(`Failed to get warehouses: ${error.message}`);
+    }
+  }
+
   private isValidSqlQuery(query: string): boolean {
     // Very simplified SQL validation
     const normalizedQuery = query.toLowerCase().trim();

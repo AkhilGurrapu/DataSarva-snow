@@ -4,10 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { apiRequest } from "../lib/queryClient";
 import { Badge } from "../components/ui/badge";
-import { PlusCircle, Search } from "lucide-react";
+import { PlusCircle, Search, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
+import { snowflakeClient } from "../lib/snowflake";
+import { useToast } from "../hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 
 type WarehousesProps = {
   user: any;
@@ -33,156 +35,41 @@ export default function Warehouses({ user, onLogout }: WarehousesProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        // This would be a real API call in production
-        // For now we'll create mock data that matches the mockups
-        const mockWarehouses: Warehouse[] = [
-          {
-            id: 1,
-            name: "FINANCE_PROD_PAYMENTS",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 22235.54,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 2,
-            name: "BUSINESS_X_DEPT_XL",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 5020.43,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 3,
-            name: "BUSINESS_X_WH",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 12345.14,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 4,
-            name: "BUSINESS_X_CUSTOMERNAME",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 12262.16,
-            isManaged: false,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 5,
-            name: "RARE_Q_DELTA",
-            org: "Nexus 6",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 16115.34,
-            isManaged: false,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 6,
-            name: "CMPT1_USRPC_WH",
-            org: "Nexus 6",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 9349.77,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 7,
-            name: "BUSINESS_D_CANADA",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 10020.95,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 8,
-            name: "DIST_T_WH",
-            org: "Nexus 6",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 5292.43,
-            isManaged: false,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 9,
-            name: "COMP_Q_DIA",
-            org: "Nexus 6",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 10343.94,
-            isManaged: true,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          },
-          {
-            id: 10,
-            name: "SQL_WH",
-            org: "Global Payments",
-            account: "GMRBSTPL_SC_1",
-            size: "X-SMALL",
-            cluster: "Min 1 Max 1",
-            maxMonthlyCost: 2235.54,
-            isManaged: false,
-            yourRole: "Owner",
-            state: "On",
-            lastUpdated: "2024-02-27"
-          }
-        ];
+        setError(null);
         
-        setWarehouses(mockWarehouses);
-      } catch (error) {
+        // Get warehouses from the Snowflake API using our client
+        const response = await snowflakeClient.getWarehouses();
+        
+        if (response && Array.isArray(response)) {
+          setWarehouses(response);
+        } else {
+          // If no data is available, use empty array
+          setWarehouses([]);
+        }
+      } catch (error: any) {
         console.error("Failed to fetch warehouses:", error);
+        setError(error.message || "Failed to fetch warehouses from Snowflake");
+        setWarehouses([]);
+        
+        toast({
+          title: "Error fetching warehouses",
+          description: error.message || "Could not retrieve warehouse data from Snowflake",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
     }
     
     fetchData();
-  }, []);
+  }, [toast]);
 
   const filteredWarehouses = warehouses.filter(warehouse => {
     if (searchTerm && !warehouse.name.toLowerCase().includes(searchTerm.toLowerCase())) {
@@ -240,54 +127,74 @@ export default function Warehouses({ user, onLogout }: WarehousesProps) {
                     />
                   </div>
                 </div>
+                
+                {error && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>
+                      {error}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b text-sm text-gray-500">
-                        <th className="text-left py-2 px-3 font-medium">Name</th>
-                        <th className="text-left py-2 px-3 font-medium">Org</th>
-                        <th className="text-left py-2 px-3 font-medium">Account</th>
-                        <th className="text-left py-2 px-3 font-medium">Max Monthly Cost</th>
-                        <th className="text-left py-2 px-3 font-medium">Managed</th>
-                        <th className="text-left py-2 px-3 font-medium">Last Updated</th>
-                        <th className="text-left py-2 px-3 font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredWarehouses.map((warehouse) => (
-                        <tr key={warehouse.id} className="border-b hover:bg-gray-50">
-                          <td className="py-2 px-3 font-medium text-blue-600">
-                            {warehouse.name}
-                          </td>
-                          <td className="py-2 px-3">{warehouse.org}</td>
-                          <td className="py-2 px-3">{warehouse.account}</td>
-                          <td className="py-2 px-3">${warehouse.maxMonthlyCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="py-2 px-3">
-                            {warehouse.isManaged ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">Y</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">N</Badge>
-                            )}
-                          </td>
-                          <td className="py-2 px-3">{warehouse.lastUpdated}</td>
-                          <td className="py-2 px-3">
-                            <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
-                              Redesign
-                            </Button>
-                          </td>
+                {loading ? (
+                  <div className="py-8 text-center text-gray-500">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+                    <p className="mt-2">Loading warehouse data from Snowflake...</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b text-sm text-gray-500">
+                          <th className="text-left py-2 px-3 font-medium">Name</th>
+                          <th className="text-left py-2 px-3 font-medium">Org</th>
+                          <th className="text-left py-2 px-3 font-medium">Account</th>
+                          <th className="text-left py-2 px-3 font-medium">Max Monthly Cost</th>
+                          <th className="text-left py-2 px-3 font-medium">Managed</th>
+                          <th className="text-left py-2 px-3 font-medium">Last Updated</th>
+                          <th className="text-left py-2 px-3 font-medium"></th>
                         </tr>
-                      ))}
-                      {filteredWarehouses.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="py-4 text-center text-gray-500">
-                            No warehouses found matching your criteria
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {filteredWarehouses.length > 0 ? (
+                          filteredWarehouses.map((warehouse) => (
+                            <tr key={warehouse.id} className="border-b hover:bg-gray-50">
+                              <td className="py-2 px-3 font-medium text-blue-600">
+                                {warehouse.name}
+                              </td>
+                              <td className="py-2 px-3">{warehouse.org}</td>
+                              <td className="py-2 px-3">{warehouse.account}</td>
+                              <td className="py-2 px-3">${warehouse.maxMonthlyCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="py-2 px-3">
+                                {warehouse.isManaged ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">Y</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">N</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-3">{warehouse.lastUpdated}</td>
+                              <td className="py-2 px-3">
+                                <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                                  Redesign
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className="py-4 text-center text-gray-500">
+                              {searchTerm || activeTab !== "all" 
+                                ? "No warehouses found matching your criteria" 
+                                : "No warehouses found in your Snowflake account"}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import MainLayout from "../components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
-import { ArrowLeft, Check, DollarSign, TrendingDown } from "lucide-react";
+import { ArrowLeft, Check, DollarSign, TrendingDown, AlertCircle } from "lucide-react";
+import { snowflakeClient } from "../lib/snowflake";
+import { useToast } from "../hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 
 type RecommendationsProps = {
   user: any;
@@ -24,15 +26,18 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [totalSavings, setTotalSavings] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedRecommendations, setSelectedRecommendations] = useState<number[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
+        setError(null);
         
-        // Get recommendations from the Snowflake API
-        const response = await apiRequest<Recommendation[]>("GET", "/api/recommendations");
+        // Get recommendations from the Snowflake API using our client
+        const response = await snowflakeClient.getRecommendations();
         
         if (response && Array.isArray(response) && response.length > 0) {
           setRecommendations(response);
@@ -45,18 +50,25 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
           setRecommendations([]);
           setTotalSavings(0);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch recommendations:", error);
+        setError(error.message || "Failed to fetch recommendations from Snowflake");
         // On error, clear data and show empty state
         setRecommendations([]);
         setTotalSavings(0);
+        
+        toast({
+          title: "Error fetching recommendations",
+          description: error.message || "Could not retrieve recommendation data from Snowflake",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
     }
     
     fetchData();
-  }, []);
+  }, [toast]);
 
   const toggleRecommendation = (id: number) => {
     if (selectedRecommendations.includes(id)) {
@@ -115,6 +127,16 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
             </Button>
           </div>
         </div>
+        
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12">
@@ -212,9 +234,11 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
               </div>
               <h3 className="text-xl font-medium mb-2">No Recommendations Available</h3>
               <p className="text-gray-500 max-w-md mb-6">
-                There are currently no recommendations available for your warehouses. 
-                This could be because your warehouses are already optimized, or because
-                there isn't enough usage data to generate recommendations.
+                {error ? 
+                  "Unable to fetch recommendations from Snowflake. Please check your connection and access privileges."
+                  : 
+                  "There are currently no recommendations available for your warehouses. This could be because your warehouses are already optimized, or because there isn't enough usage data to generate recommendations."
+                }
               </p>
               <Link href="/warehouses" className="text-blue-600 hover:text-blue-700 font-medium">
                 Go to Warehouses
