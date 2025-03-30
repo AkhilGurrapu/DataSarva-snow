@@ -18,6 +18,7 @@ type Recommendation = {
   recommendedCost: number;
   savings: number;
   savingsPercentage: number;
+  recommendation?: string;
 };
 
 type DashboardStats = {
@@ -128,19 +129,23 @@ export default function Home({ user, onLogout }: HomeProps) {
                   <CardContent>
                     {recommendations.length > 0 ? (
                       <div className="space-y-2">
-                        <div className="grid grid-cols-4 text-xs text-gray-500 font-medium">
-                          <div>Warehouse</div>
-                          <div className="text-right">Current Cost</div>
-                          <div className="text-right">Recommended</div>
-                          <div className="text-right">Savings</div>
+                        <div className="grid grid-cols-12 text-xs text-gray-500 font-medium">
+                          <div className="col-span-3">Warehouse</div>
+                          <div className="col-span-2 text-right">Current Cost</div>
+                          <div className="col-span-2 text-right">Recommended</div>
+                          <div className="col-span-2 text-right">Savings</div>
+                          <div className="col-span-3">Action</div>
                         </div>
                         {recommendations.slice(0, 5).map((rec) => (
-                          <div key={rec.id} className="grid grid-cols-4 py-2 border-t border-gray-100">
-                            <div className="font-medium text-blue-600">{rec.warehouseName}</div>
-                            <div className="text-right">${rec.currentCost.toFixed(2)}</div>
-                            <div className="text-right">${rec.recommendedCost.toFixed(2)}</div>
-                            <div className="text-right text-green-600 font-medium">
+                          <div key={rec.id} className="grid grid-cols-12 py-2 border-t border-gray-100">
+                            <div className="col-span-3 font-medium text-blue-600">{rec.warehouseName}</div>
+                            <div className="col-span-2 text-right">${rec.currentCost.toFixed(2)}</div>
+                            <div className="col-span-2 text-right">${rec.recommendedCost.toFixed(2)}</div>
+                            <div className="col-span-2 text-right text-green-600 font-medium">
                               ${rec.savings.toFixed(2)} ({rec.savingsPercentage.toFixed(1)}%)
+                            </div>
+                            <div className="col-span-3 text-sm text-gray-600">
+                              {rec.recommendation || "Optimize resource allocation"}
                             </div>
                           </div>
                         ))}

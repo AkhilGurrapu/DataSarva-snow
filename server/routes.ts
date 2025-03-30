@@ -501,63 +501,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No active connection found" });
       }
       
-      // In a real implementation, this would query Snowflake to get actual usage
-      // and generate recommendations based on that data
       try {
-        // Get warehouse recommendations from Snowflake
-        // This would involve analyzing query patterns, usage metrics, etc.
-        const recommendationsQuery = `
-          SELECT 
-            WAREHOUSE_NAME, 
-            CREDITS_USED * 3.0 AS CURRENT_COST, 
-            CASE 
-              WHEN AVG_RUNNING < 50 THEN CREDITS_USED * 3.0 * 0.6
-              WHEN AVG_RUNNING < 70 THEN CREDITS_USED * 3.0 * 0.7
-              ELSE CREDITS_USED * 3.0 * 0.8
-            END AS RECOMMENDED_COST
-          FROM 
-            SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-          WHERE 
-            START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
-          ORDER BY 
-            CREDITS_USED DESC
-          LIMIT 5;
-        `;
+        // First set the role to ACCOUNTADMIN
+        await snowflakeService.executeQuery(activeConnection, "USE ROLE ACCOUNTADMIN");
         
-        const result = await snowflakeService.executeQuery(activeConnection, recommendationsQuery);
+        // Get warehouses
+        const warehousesResult = await snowflakeService.executeQuery(activeConnection, "SHOW WAREHOUSES");
         
-        if (result && result.results && result.results.length > 0) {
-          // Transform the results into the expected format
-          const recommendations = result.results.map((row: any, index: number) => {
-            const currentCost = parseFloat(row.CURRENT_COST);
-            const recommendedCost = parseFloat(row.RECOMMENDED_COST);
-            const savings = currentCost - recommendedCost;
-            const savingsPercentage = (savings / currentCost) * 100;
-            
-            return {
-              id: index + 1,
-              warehouseName: row.WAREHOUSE_NAME,
-              currentCost: currentCost,
-              recommendedCost: recommendedCost,
-              savings: savings,
-              savingsPercentage: savingsPercentage
-            };
-          });
-          
-          return res.json(recommendations);
+        if (!warehousesResult.results || warehousesResult.results.length === 0) {
+          return res.json([]);
         }
         
-        // If the query executed but returned no data, return an empty array
-        return res.json([]);
+        // Get warehouse usage from query history
+        const usageQuery = `
+          SELECT 
+            WAREHOUSE_NAME,
+            COUNT(*) as QUERY_COUNT,
+            AVG(EXECUTION_TIME) / 1000 as AVG_EXECUTION_TIME_SECONDS,
+            SUM(EXECUTION_TIME) / 1000 as TOTAL_EXECUTION_TIME_SECONDS
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
+            AND WAREHOUSE_NAME IS NOT NULL
+          GROUP BY 
+            WAREHOUSE_NAME
+          ORDER BY 
+            TOTAL_EXECUTION_TIME_SECONDS DESC
+        `;
+        
+        const usageResult = await snowflakeService.executeQuery(activeConnection, usageQuery);
+        
+        // Get warehouse credit usage if possible
+        let creditUsageResult;
+        try {
+          const creditQuery = `
+            SELECT 
+              WAREHOUSE_NAME, 
+              SUM(CREDITS_USED) as TOTAL_CREDITS
+            FROM 
+              SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+            WHERE 
+              START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
+            GROUP BY 
+              WAREHOUSE_NAME
+          `;
+          
+          creditUsageResult = await snowflakeService.executeQuery(activeConnection, creditQuery);
+        } catch (creditError) {
+          console.warn("Could not get credit usage data:", creditError);
+          // Continue without credit data
+        }
+        
+        // Build recommendations by analyzing warehouse size, usage patterns, and credits
+        const recommendations = [];
+        
+        for (const warehouse of warehousesResult.results) {
+          const warehouseName = warehouse.name || warehouse["name"];
+          if (!warehouseName) continue;
+          
+          // Find usage data for this warehouse
+          const usageData = usageResult.results?.find((r: any) => {
+            const name = r.WAREHOUSE_NAME || r["WAREHOUSE_NAME"];
+            return name && name.toUpperCase() === warehouseName.toUpperCase();
+          });
+          
+          // Find credit data for this warehouse
+          const creditData = creditUsageResult?.results?.find((r: any) => {
+            const name = r.WAREHOUSE_NAME || r["WAREHOUSE_NAME"];
+            return name && name.toUpperCase() === warehouseName.toUpperCase();
+          });
+          
+          // Skip warehouses with no usage data
+          if (!usageData) continue;
+          
+          // Calculate metrics for recommendations
+          const queryCount = Number(usageData.QUERY_COUNT || usageData["QUERY_COUNT"] || 0);
+          const avgExecutionTime = Number(usageData.AVG_EXECUTION_TIME_SECONDS || usageData["AVG_EXECUTION_TIME_SECONDS"] || 0);
+          const totalExecutionTime = Number(usageData.TOTAL_EXECUTION_TIME_SECONDS || usageData["TOTAL_EXECUTION_TIME_SECONDS"] || 0);
+          
+          // Get warehouse size and estimate if we can downsize
+          const warehouseSize = warehouse.size || warehouse["size"] || "X-Small";
+          const sizeMap: Record<string, { cost: number, index: number }> = {
+            "X-Small": { cost: 1, index: 0 },
+            "Small": { cost: 2, index: 1 },
+            "Medium": { cost: 4, index: 2 },
+            "Large": { cost: 8, index: 3 },
+            "X-Large": { cost: 16, index: 4 },
+            "2X-Large": { cost: 32, index: 5 },
+            "3X-Large": { cost: 64, index: 6 },
+            "4X-Large": { cost: 128, index: 7 }
+          };
+          
+          // Credits and costs
+          const credits = Number(creditData?.TOTAL_CREDITS || creditData?.["TOTAL_CREDITS"] || 0);
+          const currentCost = credits > 0 ? credits * 3 : (sizeMap[warehouseSize]?.cost || 1) * 3 * (totalExecutionTime / 3600);
+          
+          // Only generate recommendations for warehouses that seem high cost
+          if (currentCost < 10) continue;
+          
+          // Generate recommendation logic:
+          // 1. Long-running queries + large warehouse → auto-suspend
+          // 2. Low query count + large warehouse → downsize
+          
+          let recommendedCost = currentCost;
+          let recommendation = "";
+          let savingsPercentage = 0;
+          
+          if (avgExecutionTime > 60 && queryCount < 100) {
+            // Recommend downsizing
+            const currentSizeInfo = sizeMap[warehouseSize];
+            if (currentSizeInfo && currentSizeInfo.index > 0) {
+              const sizes = Object.keys(sizeMap);
+              const newSizeKey = sizes[currentSizeInfo.index - 1];
+              const newSizeCost = sizeMap[newSizeKey].cost;
+              
+              recommendedCost = (credits > 0) 
+                ? currentCost * (newSizeCost / currentSizeInfo.cost)
+                : newSizeCost * 3 * (totalExecutionTime / 3600);
+                
+              recommendation = `Downsize from ${warehouseSize} to ${newSizeKey}`;
+            }
+          } else if (queryCount < 50) {
+            // Recommend auto-suspend
+            recommendedCost = currentCost * 0.7;
+            recommendation = "Configure auto-suspend to reduce idle time";
+          } else {
+            // No clear recommendation
+            continue;
+          }
+          
+          // Calculate savings
+          const savings = currentCost - recommendedCost;
+          savingsPercentage = (savings / currentCost) * 100;
+          
+          if (savings > 0) {
+            recommendations.push({
+              id: recommendations.length + 1,
+              warehouseName,
+              currentCost: parseFloat(currentCost.toFixed(2)),
+              recommendedCost: parseFloat(recommendedCost.toFixed(2)),
+              savings: parseFloat(savings.toFixed(2)),
+              savingsPercentage: parseFloat(savingsPercentage.toFixed(1)),
+              recommendation
+            });
+          }
+        }
+        
+        // Sort by potential savings and limit to top recommendations
+        recommendations.sort((a, b) => b.savings - a.savings);
+        return res.json(recommendations.slice(0, 5));
         
       } catch (err) {
         // If Snowflake query fails, handle gracefully
         console.error("Failed to get warehouse recommendations from Snowflake:", err);
-        
-        // In a real implementation with fallback logic, you might:
-        // 1. Try an alternative query
-        // 2. Use cached data if available
-        // 3. Return empty results with a status
         return res.json([]);
       }
     } catch (err: any) {

@@ -196,27 +196,68 @@ class SnowflakeService {
 
   async getWarehouses(connection: SnowflakeConnection): Promise<any[]> {
     try {
-      const query = `
-        SELECT 
-          WAREHOUSE_NAME as name,
-          ORGANIZATION_NAME as org,
-          ACCOUNT_NAME as account,
-          SIZE as size,
-          MIN_CLUSTER_COUNT || ' to ' || MAX_CLUSTER_COUNT as cluster,
-          CREDITS_USED * 3.0 as maxMonthlyCost,
-          CASE WHEN AUTO_SUSPEND > 0 THEN true ELSE false END as isManaged,
-          'Owner' as yourRole,
-          STATE as state,
-          TO_CHAR(CREATED_ON, 'YYYY-MM-DD') as lastUpdated,
-          WAREHOUSE_ID as id
-        FROM 
-          SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSES
-        ORDER BY 
-          CREDITS_USED DESC
-      `;
+      // Set the role to ACCOUNTADMIN for permissions
+      await this.executeQuery(connection, "USE ROLE ACCOUNTADMIN");
       
-      const result = await this.executeQuery(connection, query);
-      return result.results || [];
+      // First get basic warehouse info using SHOW WAREHOUSES
+      const warehousesResult = await this.executeQuery(connection, "SHOW WAREHOUSES");
+      
+      if (!warehousesResult.results || warehousesResult.results.length === 0) {
+        return [];
+      }
+      
+      // Transform the results into a more useful format
+      const warehouses = warehousesResult.results.map((wh: any) => {
+        return {
+          name: wh.name || wh["name"],
+          size: wh.size || wh["size"],
+          state: wh.state || wh["state"],
+          type: wh.type || wh["type"],
+          isManaged: (wh.auto_suspend && wh.auto_suspend > 0) || (wh["AUTO_SUSPEND"] && wh["AUTO_SUSPEND"] > 0),
+          id: wh.name || wh["name"], // Use name as ID since SHOW WAREHOUSES doesn't return WAREHOUSE_ID
+          lastUpdated: new Date().toISOString().split('T')[0], // Current date as we don't have created_on from SHOW
+          yourRole: 'Owner', // Default role
+          cluster: '1 to 1', // Default cluster
+          maxMonthlyCost: 0 // Default cost, will be updated if usage data is available
+        };
+      });
+      
+      // Get additional credit usage data if available
+      try {
+        const usageQuery = `
+          SELECT 
+            WAREHOUSE_NAME, 
+            SUM(CREDITS_USED) as CREDITS_USED 
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY 
+          WHERE 
+            START_TIME >= DATEADD(month, -1, CURRENT_TIMESTAMP())
+          GROUP BY 
+            WAREHOUSE_NAME
+        `;
+        
+        const usageResult = await this.executeQuery(connection, usageQuery);
+        
+        if (usageResult.results && usageResult.results.length > 0) {
+          // Add credit usage info to warehouses
+          usageResult.results.forEach((usage: any) => {
+            const warehouseName = usage.WAREHOUSE_NAME || usage["WAREHOUSE_NAME"];
+            const warehouse = warehouses.find((wh: any) => 
+              wh.name.toUpperCase() === warehouseName
+            );
+            
+            if (warehouse) {
+              const credits = usage.CREDITS_USED || usage["CREDITS_USED"] || 0;
+              warehouse.maxMonthlyCost = +(credits * 3.0).toFixed(2); // Estimate cost based on $3/credit
+            }
+          });
+        }
+      } catch (usageError) {
+        console.warn("Could not retrieve warehouse usage data:", usageError);
+        // Continue without usage data
+      }
+      
+      return warehouses;
     } catch (error: any) {
       throw new Error(`Failed to get warehouses: ${error.message}`);
     }

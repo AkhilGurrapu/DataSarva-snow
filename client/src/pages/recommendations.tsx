@@ -20,6 +20,7 @@ type Recommendation = {
   recommendedCost: number;
   savings: number;
   savingsPercentage: number;
+  recommendation?: string;
 };
 
 export default function Recommendations({ user, onLogout }: RecommendationsProps) {
@@ -163,6 +164,7 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
                           <th className="py-3 px-4 text-right">Recommended Cost</th>
                           <th className="py-3 px-4 text-right">Savings</th>
                           <th className="py-3 px-4 text-right">Savings %</th>
+                          <th className="py-3 px-4 text-left">Recommendation</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -198,6 +200,9 @@ export default function Recommendations({ user, onLogout }: RecommendationsProps
                                   {rec.savingsPercentage.toFixed(1)}%
                                 </span>
                               </div>
+                            </td>
+                            <td className="py-3 px-4 text-left text-sm text-gray-600">
+                              {rec.recommendation || "Optimize resource allocation"}
                             </td>
                           </tr>
                         ))}
