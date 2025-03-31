@@ -15,7 +15,9 @@ import {
   ChevronRight,
   BarChart,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Check,
+  Copy
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { snowflakeClient } from "../lib/snowflake";
@@ -57,12 +59,14 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
   const [selectedQuery, setSelectedQuery] = useState<QueryHistory | null>(null);
   const [queryText, setQueryText] = useState("");
   const [opportunities, setOpportunities] = useState<QueryOpportunity[]>([]);
+  const [optimizedQuery, setOptimizedQuery] = useState<string>("");
   const [analyzingQuery, setAnalyzingQuery] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [copied, setCopied] = useState(false);
 
   // Function to fetch query history that can be called from multiple places
   const fetchQueryHistory = async () => {
@@ -145,6 +149,8 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
     console.log("Starting analysis of query:", queryToProcess);
     setAnalyzingQuery(true);
     setOpportunities([]);
+    setOptimizedQuery("");
+    setCopied(false);
     
     try {
       // Call the analyze-query endpoint
@@ -167,7 +173,12 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
         console.log("Formatted opportunities:", formattedOpportunities);
         setOpportunities(formattedOpportunities);
         
-        if (formattedOpportunities.length === 0) {
+        // Set the optimized query if available
+        if (analysis.optimizedQuery) {
+          setOptimizedQuery(analysis.optimizedQuery);
+        }
+        
+        if (formattedOpportunities.length === 0 && !analysis.optimizedQuery) {
           toast({
             title: "No optimization opportunities",
             description: "Your query appears to be already optimized.",
@@ -431,6 +442,72 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
             )}
           </div>
         </div>
+        
+        {/* Optimized Query Section */}
+        {!analyzingQuery && optimizedQuery && (
+          <Card className="mt-6">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center text-lg">
+                <Check className="h-5 w-5 mr-2 text-green-600" />
+                Optimized Query
+              </CardTitle>
+              <CardDescription>
+                This is the suggested optimized version of your query that should perform better
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Textarea
+                  className="min-h-[200px] font-mono text-sm w-full resize-y pr-12 bg-gray-50"
+                  value={optimizedQuery}
+                  readOnly
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute top-3 right-3 h-8 w-8 bg-white hover:bg-gray-100"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(optimizedQuery);
+                      setCopied(true);
+                      toast({
+                        title: "Copied to clipboard",
+                        description: "Optimized query has been copied to your clipboard",
+                        variant: "default"
+                      });
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch (error) {
+                      console.error("Failed to copy:", error);
+                      toast({
+                        title: "Failed to copy",
+                        description: "Could not copy to clipboard. Please try manually selecting the text.",
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                >
+                  {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                  onClick={() => {
+                    setQueryText(optimizedQuery);
+                    toast({
+                      title: "Query replaced",
+                      description: "The original query has been replaced with the optimized version",
+                      variant: "default"
+                    });
+                  }}
+                >
+                  Use this query
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </MainLayout>
   );
