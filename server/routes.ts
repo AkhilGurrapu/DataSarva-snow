@@ -511,28 +511,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const { query, connectionId } = req.body;
       
+      console.log("Query analysis request:", { query: query?.substring(0, 50) + "...", connectionId });
+      
       if (!query) {
         return res.status(400).json({ message: "Query is required" });
       }
       
       // Get connections
       const connections = await storage.getConnectionsByUserId(userId);
+      console.log(`Found ${connections.length} connections for user`);
+      
       let activeConnection;
       
       if (connectionId) {
         // If connectionId is provided, use that connection
         activeConnection = connections.find(c => c.id === parseInt(connectionId));
+        console.log("Using specified connection:", connectionId);
       } else {
         // Otherwise use the active connection
         activeConnection = connections.find(c => c.isActive);
+        console.log("Using active connection:", activeConnection?.id);
+      }
+      
+      if (!activeConnection && connections.length > 0) {
+        // If no active connection is found but we have connections, use the first one
+        activeConnection = connections[0];
+        console.log("No active connection found, using first connection:", activeConnection.id);
       }
       
       if (!activeConnection) {
-        return res.status(400).json({ message: "No active Snowflake connection found" });
+        console.log("No connections available for analysis");
+        return res.status(400).json({ message: "No Snowflake connection found. Please create a connection first." });
       }
+      
+      console.log("Using connection for analysis:", activeConnection.id);
       
       // Try to analyze the query through OpenAI
       const analysis = await openaiService.analyzeQuery(query);
+      console.log("Analysis result:", { 
+        suggestionCount: analysis.suggestions?.length,
+        hasOptimizedQuery: !!analysis.optimizedQuery
+      });
       
       // Save to query history
       try {
@@ -541,10 +560,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           connectionId: activeConnection.id,
           originalQuery: query,
           optimizedQuery: analysis.optimizedQuery || query,
-          suggestions: analysis.suggestions || []
+          suggestions: JSON.stringify(analysis.suggestions || [])
         };
         
         await storage.createQueryHistory(queryHistoryData);
+        console.log("Query history saved successfully");
       } catch (historyErr) {
         console.error("Failed to save query history:", historyErr);
         // Continue even if history saving fails

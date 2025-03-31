@@ -29,7 +29,10 @@ export const snowflakeClient = {
   
   async analyzeQuery(query: string) {
     try {
-      return await apiRequest("POST", "/api/analyze-query", { query });
+      console.log("Sending query for analysis:", query);
+      const result = await apiRequest("POST", "/api/analyze-query", { query });
+      console.log("Analysis result:", result);
+      return result;
     } catch (error) {
       console.error("Query analysis failed:", error);
       throw new Error("Failed to analyze query. Please try again.");

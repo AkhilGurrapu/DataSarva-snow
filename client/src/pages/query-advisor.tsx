@@ -133,14 +133,23 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
 
   const handleAnalyzeQuery = async (queryToAnalyze?: string) => {
     const queryToProcess = queryToAnalyze || queryText;
-    if (!queryToProcess.trim()) return;
+    if (!queryToProcess.trim()) {
+      toast({
+        title: "Empty query",
+        description: "Please enter a SQL query to analyze.",
+        variant: "destructive"
+      });
+      return;
+    }
     
+    console.log("Starting analysis of query:", queryToProcess);
     setAnalyzingQuery(true);
     setOpportunities([]);
     
     try {
       // Call the analyze-query endpoint
       const analysis = await snowflakeClient.analyzeQuery(queryToProcess);
+      console.log("Analysis response:", analysis);
       
       if (analysis && analysis.suggestions) {
         // Convert the suggestions to our opportunity format
@@ -155,8 +164,18 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
           }
         }));
         
+        console.log("Formatted opportunities:", formattedOpportunities);
         setOpportunities(formattedOpportunities);
+        
+        if (formattedOpportunities.length === 0) {
+          toast({
+            title: "No optimization opportunities",
+            description: "Your query appears to be already optimized.",
+            variant: "default"
+          });
+        }
       } else {
+        console.error("Analysis response format unexpected:", analysis);
         toast({
           title: "Analysis failed",
           description: "Could not analyze the query. Please try again.",
