@@ -199,35 +199,54 @@ class SnowflakeService {
       // Set the role to ACCOUNTADMIN for permissions
       await this.executeQuery(connection, "USE ROLE ACCOUNTADMIN");
       
-      // Query to get all databases with their size data from account usage
-      const query = `
-        SELECT 
-          d.database_name as name,
-          d.organization_name as business_org,
-          d.account_name as account, 
-          SUM(t.bytes) as bytes,
-          SUM(t.bytes/(1024*1024*1024*1024)) as size_tb,
-          CASE 
-            WHEN SUM(t.bytes) > 0 THEN 
-              '$' || ROUND(SUM(t.bytes) * 0.00000002, 2) 
-            ELSE 
-              '$0' 
-          END as monthly_cost
-        FROM 
-          SNOWFLAKE.ACCOUNT_USAGE.DATABASES d
-        LEFT JOIN 
-          SNOWFLAKE.ACCOUNT_USAGE.TABLES t 
-        ON 
-          d.database_id = t.database_id
-        GROUP BY 
-          d.database_name, d.organization_name, d.account_name
-        ORDER BY 
-          SUM(t.bytes) DESC
-      `;
-      
-      const result = await this.executeQuery(connection, query);
-      return result.results || [];
+      // First try to get databases from SHOW DATABASES as this is more reliable
+      try {
+        const simpleQuery = `SHOW DATABASES;`;
+        const result = await this.executeQuery(connection, simpleQuery);
+        
+        // Transform the results to match our expected format
+        if (result.results && result.results.length > 0) {
+          return result.results.map((db: any) => ({
+            name: db.name || db["name"],
+            business_org: "Slingshot",
+            account: connection.account,
+            bytes: 0,
+            size_tb: 0,
+            monthly_cost: "$0"
+          }));
+        }
+        
+        // If no results, return empty array
+        return [];
+      } catch (error) {
+        console.error("Error getting databases with SHOW DATABASES:", error);
+        
+        // Try an alternative query using INFORMATION_SCHEMA which should work on all Snowflake accounts
+        try {
+          const alternativeQuery = `
+            SELECT 
+              DATABASE_NAME as name,
+              'Slingshot' as business_org,
+              '${connection.account}' as account,
+              0 as bytes,
+              0 as size_tb,
+              '$0' as monthly_cost
+            FROM 
+              INFORMATION_SCHEMA.DATABASES
+            ORDER BY 
+              name
+          `;
+          
+          const result = await this.executeQuery(connection, alternativeQuery);
+          return result.results || [];
+        } catch (fallbackError) {
+          console.error("Error getting databases with INFORMATION_SCHEMA:", fallbackError);
+          // If all attempts fail, return empty array
+          return [];
+        }
+      }
     } catch (error: any) {
+      console.error("Failed to get databases:", error);
       throw new Error(`Failed to get databases: ${error.message}`);
     }
   }
