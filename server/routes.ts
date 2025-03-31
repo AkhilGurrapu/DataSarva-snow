@@ -449,6 +449,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: err.message });
     }
   });
+  
+  // Query analysis route
+  app.post("/api/analyze-query", isAuthenticated, async (req, res) => {
+    try {
+      const { query } = req.body;
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      
+      const analysis = await openaiService.analyzeQuery(query);
+      res.json(analysis);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // Activity logs route
   app.get("/api/activity-logs", isAuthenticated, async (req, res) => {

@@ -26,6 +26,15 @@ export const snowflakeClient = {
       throw new Error("Failed to fetch connections. Please try again.");
     }
   },
+  
+  async analyzeQuery(query: string) {
+    try {
+      return await apiRequest("POST", "/api/analyze-query", { query });
+    } catch (error) {
+      console.error("Query analysis failed:", error);
+      throw new Error("Failed to analyze query. Please try again.");
+    }
+  },
 
   async updateConnection(id: number, connectionParams: Partial<{
     name: string;

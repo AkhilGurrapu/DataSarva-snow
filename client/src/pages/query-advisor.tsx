@@ -14,10 +14,13 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
-import { openaiClient } from "../lib/openai";
+import { snowflakeClient } from "../lib/snowflake";
+import { useConnection } from "../hooks/use-connection";
+import { useToast } from "../hooks/use-toast";
 
 type QueryAdvisorProps = {
   user: any;
@@ -25,10 +28,10 @@ type QueryAdvisorProps = {
 };
 
 type QueryHistory = {
-  id: string;
+  id: string | number;
   query: string;
   lastRun: string;
-  accountName: string;
+  warehouse: string;
   frequency: number;
   cost: number;
   executionTime: number;
@@ -36,161 +39,146 @@ type QueryHistory = {
 };
 
 type QueryOpportunity = {
-  id: string;
   title: string;
   description: string;
-  location: {
+  location?: {
     line: number;
     column: number;
   };
-  reason: string;
-  severity: "low" | "medium" | "high";
+  reason?: string;
+  severity?: "low" | "medium" | "high";
   suggestion: string;
 };
 
 export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
+  const { activeConnection } = useConnection();
+  const { toast } = useToast();
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
   const [selectedQuery, setSelectedQuery] = useState<QueryHistory | null>(null);
   const [queryText, setQueryText] = useState("");
   const [opportunities, setOpportunities] = useState<QueryOpportunity[]>([]);
   const [analyzingQuery, setAnalyzingQuery] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(7);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    async function fetchData() {
+    // Fetch query history from Snowflake
+    async function fetchQueryHistory() {
+      if (!activeConnection) return;
+      
       try {
-        // This would be real API calls in production
-        // For now we'll create mock data that matches the mockups
-        const mockQueries: QueryHistory[] = [
-          {
-            id: "01e4f21-50d4-c9f8-92f9-16f0e0000e86",
-            query: "SELECT * FROM table1 t1 JOIN table2 t2 ON t1.id = t2.id WHERE t1.status = 'ACTIVE'",
-            lastRun: "Apr 15, 2024",
-            accountName: "snowflake1 (APP_API)",
-            frequency: 10742,
-            cost: 13.45,
-            executionTime: 0.53,
-            lastBilled: "Apr 15, 2024"
-          },
-          {
-            id: "03b6572f-000d-cf38-d7d1-84fd07103e3a",
-            query: "SELECT t1.*, t2.name FROM orders t1 JOIN customers t2 ON t1.customer_id = t2.id",
-            lastRun: "Apr 15, 2024",
-            accountName: "snowflake1 (APP_API)",
-            frequency: 11,
-            cost: 5.98,
-            executionTime: 0.03,
-            lastBilled: "Apr 15, 2024"
-          },
-          {
-            id: "01abfe-0505-dc89-0f01-364007101c",
-            query: "SELECT department_id, COUNT(*) FROM employees GROUP BY department_id",
-            lastRun: "May 8, 2024",
-            accountName: "snowflake1 (APP_API)",
-            frequency: 25,
-            cost: 10.75,
-            executionTime: 0.08,
-            lastBilled: "May 8, 2024"
-          },
-          {
-            id: "01fbef9-fa02-cd9b-0f01-f002006c",
-            query: "SELECT * FROM inventory WHERE quantity < 100",
-            lastRun: "May 20, 2024",
-            accountName: "snowflake1 (APP_API)",
-            frequency: 42,
-            cost: 12.67,
-            executionTime: 0.14,
-            lastBilled: "May 20, 2024"
-          }
-        ];
+        setLoading(true);
+        setError(null);
         
-        setQueryHistory(mockQueries);
-      } catch (error) {
-        console.error("Failed to fetch query history:", error);
+        // Call the API to get query history
+        const data = await snowflakeClient.getQueryHistory(20); // Get last 20 queries
+        
+        if (data && Array.isArray(data)) {
+          // Format the data to match our QueryHistory type
+          const formattedData = data.map((item: any) => {
+            // Format date using Intl.DateTimeFormat
+            const date = new Date(item.START_TIME || item.startTime || item.start_time);
+            const formattedDate = new Intl.DateTimeFormat('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            }).format(date);
+            
+            return {
+              id: item.QUERY_ID || item.queryId || item.id || `query-${Math.random().toString(36).substring(2, 9)}`,
+              query: item.QUERY_TEXT || item.queryText || item.query || "",
+              lastRun: formattedDate,
+              warehouse: item.WAREHOUSE_NAME || item.warehouseName || item.warehouse || "Unknown",
+              frequency: parseInt(item.EXECUTION_COUNT || item.executionCount || "1"),
+              cost: parseFloat(item.CREDITS_USED || item.creditsUsed || "0") * 3, // Assuming $3 per credit
+              executionTime: parseFloat(item.EXECUTION_TIME || item.executionTime || "0") / 1000, // Convert to seconds
+              lastBilled: formattedDate
+            };
+          });
+          
+          setQueryHistory(formattedData);
+          
+          // Set total pages based on the number of records
+          if (formattedData.length > 0) {
+            setTotalPages(Math.ceil(formattedData.length / 10));
+          }
+        } else {
+          setError("No query history data available");
+        }
+      } catch (err) {
+        console.error("Failed to fetch query history:", err);
+        setError("Failed to fetch query history. Please check your connection.");
+      } finally {
+        setLoading(false);
       }
     }
     
-    fetchData();
-  }, []);
+    fetchQueryHistory();
+  }, [activeConnection]);
 
   const handleSelectQuery = (query: QueryHistory) => {
     setSelectedQuery(query);
     setQueryText(query.query);
     
-    // Mock opportunities
-    const mockOpportunities: QueryOpportunity[] = [
-      {
-        id: "opp1",
-        title: "Use LIMIT on specific tables",
-        description: "Consider adding a LIMIT clause to your query to reduce the amount of data processed.",
-        location: {
-          line: 1,
-          column: 8
-        },
-        reason: "Optimization: Performance",
-        severity: "medium",
-        suggestion: "Add `LIMIT 1000` to your query to reduce data processing."
-      },
-      {
-        id: "opp2",
-        title: "Replace SELECT * with specific columns",
-        description: "SELECT * is expensive and impacts query performance, especially with large tables.",
-        location: {
-          line: 1,
-          column: 8
-        },
-        reason: "Optimization: Cost and Performance",
-        severity: "high",
-        suggestion: "Replace SELECT * with specific columns needed for your analysis."
-      }
-    ];
-    
-    setOpportunities(mockOpportunities);
+    // Analyze the selected query
+    handleAnalyzeQuery(query.query);
   };
 
-  const handleAnalyzeQuery = async () => {
-    if (!queryText.trim()) return;
+  const handleAnalyzeQuery = async (queryToAnalyze?: string) => {
+    const queryToProcess = queryToAnalyze || queryText;
+    if (!queryToProcess.trim()) return;
     
     setAnalyzingQuery(true);
+    setOpportunities([]);
     
     try {
-      // In production, this would call the OpenAI service
-      // Simulating a delay for analysis
-      await new Promise(r => setTimeout(r, 1500));
+      // Call the analyze-query endpoint
+      const analysis = await snowflakeClient.analyzeQuery(queryToProcess);
       
-      const mockOpportunities: QueryOpportunity[] = [
-        {
-          id: "opp1",
-          title: "Optimize JOIN operation",
-          description: "The JOIN operation could be optimized by adding appropriate indexes.",
+      if (analysis && analysis.suggestions) {
+        // Convert the suggestions to our opportunity format
+        const formattedOpportunities = analysis.suggestions.map((sugg: any, index: number) => ({
+          title: sugg.title || `Optimization ${index + 1}`,
+          description: sugg.description || "No description provided",
+          severity: getSeverityFromTitle(sugg.title) as "low" | "medium" | "high",
+          suggestion: sugg.description || "No suggestion provided",
           location: {
             line: 1,
-            column: 30
-          },
-          reason: "Performance optimization",
-          severity: "medium",
-          suggestion: "Add an index on the JOIN columns to improve query performance."
-        },
-        {
-          id: "opp2",
-          title: "Avoid SELECT *",
-          description: "Using SELECT * retrieves all columns which is inefficient for large tables.",
-          location: {
-            line: 1,
-            column: 8
-          },
-          reason: "Cost optimization",
-          severity: "high",
-          suggestion: "Specify only the columns you need instead of using SELECT *."
-        }
-      ];
-      
-      setOpportunities(mockOpportunities);
+            column: 1
+          }
+        }));
+        
+        setOpportunities(formattedOpportunities);
+      } else {
+        toast({
+          title: "Analysis failed",
+          description: "Could not analyze the query. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error("Failed to analyze query:", error);
+      toast({
+        title: "Analysis failed",
+        description: "Could not analyze the query. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setAnalyzingQuery(false);
+    }
+  };
+  
+  // Helper function to determine severity based on the suggestion title
+  const getSeverityFromTitle = (title: string): string => {
+    const lowerTitle = (title || "").toLowerCase();
+    if (lowerTitle.includes("critical") || lowerTitle.includes("serious") || lowerTitle.includes("select *")) {
+      return "high";
+    } else if (lowerTitle.includes("medium") || lowerTitle.includes("consider") || lowerTitle.includes("improve")) {
+      return "medium";
+    } else {
+      return "low";
     }
   };
 
@@ -238,55 +226,79 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
         
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b text-sm text-gray-500">
-                    <th className="text-left py-3 px-4 font-medium">Query ID</th>
-                    <th className="text-left py-3 px-4 font-medium">Last run</th>
-                    <th className="text-left py-3 px-4 font-medium">Account name</th>
-                    <th className="text-left py-3 px-4 font-medium">Frequency</th>
-                    <th className="text-left py-3 px-4 font-medium">Cost</th>
-                    <th className="text-left py-3 px-4 font-medium">
-                      Execution time (sec)
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium">Last billed date</th>
-                    <th className="text-left py-3 px-4 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queryHistory.map((query) => (
-                    <tr 
-                      key={query.id} 
-                      className="border-b hover:bg-gray-50 cursor-pointer"
-                      onClick={() => handleSelectQuery(query)}
-                    >
-                      <td className="py-3 px-4 font-medium text-blue-600 truncate max-w-xs">
-                        {query.id}
-                      </td>
-                      <td className="py-3 px-4">{query.lastRun}</td>
-                      <td className="py-3 px-4">{query.accountName}</td>
-                      <td className="py-3 px-4">{query.frequency.toLocaleString()}</td>
-                      <td className="py-3 px-4">${query.cost.toFixed(2)}</td>
-                      <td className="py-3 px-4">{query.executionTime.toFixed(2)}</td>
-                      <td className="py-3 px-4">{query.lastBilled}</td>
-                      <td className="py-3 px-4">
-                        <Button 
-                          size="sm" 
-                          className="bg-blue-600 hover:bg-blue-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectQuery(query);
-                          }}
-                        >
-                          Analyze
-                        </Button>
-                      </td>
+            {loading && (
+              <div className="flex justify-center items-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <span className="ml-2">Loading query history...</span>
+              </div>
+            )}
+            
+            {error && (
+              <div className="p-6 text-center">
+                <div className="text-red-600 mb-2">{error}</div>
+                <p className="text-gray-600 text-sm">
+                  Please check your Snowflake connection and make sure you have the appropriate permissions.
+                </p>
+              </div>
+            )}
+            
+            {!loading && !error && queryHistory.length === 0 && (
+              <div className="p-6 text-center">
+                <p className="text-gray-600">No query history found in your Snowflake account.</p>
+              </div>
+            )}
+            
+            {!loading && !error && queryHistory.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b text-sm text-gray-500">
+                      <th className="text-left py-3 px-4 font-medium">Query ID</th>
+                      <th className="text-left py-3 px-4 font-medium">Last run</th>
+                      <th className="text-left py-3 px-4 font-medium">Warehouse</th>
+                      <th className="text-left py-3 px-4 font-medium">Frequency</th>
+                      <th className="text-left py-3 px-4 font-medium">Cost</th>
+                      <th className="text-left py-3 px-4 font-medium">
+                        Execution time (sec)
+                      </th>
+                      <th className="text-left py-3 px-4 font-medium">Last billed date</th>
+                      <th className="text-left py-3 px-4 font-medium"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {queryHistory.slice((currentPage - 1) * 10, currentPage * 10).map((query) => (
+                      <tr 
+                        key={query.id} 
+                        className="border-b hover:bg-gray-50 cursor-pointer"
+                        onClick={() => handleSelectQuery(query)}
+                      >
+                        <td className="py-3 px-4 font-medium text-blue-600 truncate max-w-xs">
+                          {query.id.toString().substring(0, 20)}{query.id.toString().length > 20 ? '...' : ''}
+                        </td>
+                        <td className="py-3 px-4">{query.lastRun || 'N/A'}</td>
+                        <td className="py-3 px-4">{query.warehouse || 'N/A'}</td>
+                        <td className="py-3 px-4">{(query.frequency || 0).toLocaleString()}</td>
+                        <td className="py-3 px-4">${(query.cost || 0).toFixed(2)}</td>
+                        <td className="py-3 px-4">{(query.executionTime || 0).toFixed(2)}</td>
+                        <td className="py-3 px-4">{query.lastBilled || 'N/A'}</td>
+                        <td className="py-3 px-4">
+                          <Button 
+                            size="sm" 
+                            className="bg-blue-600 hover:bg-blue-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectQuery(query);
+                            }}
+                          >
+                            Analyze
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             
             <div className="p-4 flex items-center justify-between border-t">
               <div className="text-sm text-gray-600">
@@ -346,7 +358,7 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
                 />
                 <div className="mt-4 flex justify-end">
                   <Button 
-                    onClick={handleAnalyzeQuery}
+                    onClick={() => handleAnalyzeQuery()}
                     disabled={analyzingQuery || !queryText.trim()}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
@@ -358,7 +370,14 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
           </div>
           
           <div className="col-span-1">
-            {opportunities.length > 0 && (
+            {analyzingQuery && (
+              <div className="flex justify-center items-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <span className="ml-2">Analyzing query...</span>
+              </div>
+            )}
+            
+            {!analyzingQuery && opportunities.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center text-lg">
@@ -367,25 +386,29 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {opportunities.map((opportunity) => (
-                    <div key={opportunity.id} className="mb-6 last:mb-0">
+                  {opportunities.map((opportunity, index) => (
+                    <div key={`opp-${index}`} className="mb-6 last:mb-0">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-medium">{opportunity.title}</h3>
                         <Badge 
                           variant="outline" 
-                          className={getSeverityColor(opportunity.severity)}
+                          className={getSeverityColor(opportunity.severity || 'medium')}
                         >
-                          {opportunity.severity}
+                          {opportunity.severity || 'medium'}
                         </Badge>
                       </div>
                       
-                      <div className="text-sm mb-2">
-                        <span className="font-medium">Location:</span> Line {opportunity.location.line}, Column {opportunity.location.column}
-                      </div>
+                      {opportunity.location && (
+                        <div className="text-sm mb-2">
+                          <span className="font-medium">Location:</span> Line {opportunity.location.line}, Column {opportunity.location.column}
+                        </div>
+                      )}
                       
-                      <div className="text-sm mb-2">
-                        <span className="font-medium">Reason:</span> {opportunity.reason}
-                      </div>
+                      {opportunity.reason && (
+                        <div className="text-sm mb-2">
+                          <span className="font-medium">Reason:</span> {opportunity.reason}
+                        </div>
+                      )}
                       
                       <div className="text-sm mb-3">
                         <p>{opportunity.description}</p>
