@@ -342,7 +342,10 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
               />
               <div className="mt-4 flex justify-end">
                 <Button 
-                  onClick={() => handleAnalyzeQuery()}
+                  onClick={async () => {
+                    console.log("Analyze button clicked");
+                    await handleAnalyzeQuery();
+                  }}
                   disabled={analyzingQuery || !queryText.trim()}
                   className="bg-blue-600 hover:bg-blue-700"
                 >

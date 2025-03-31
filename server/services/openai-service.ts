@@ -16,7 +16,7 @@ class OpenAIService {
   }
 
   async analyzeQuery(query: string): Promise<{
-    suggestions: { title: string; description: string }[];
+    suggestions: { title: string; description: string; suggestion: string }[];
     optimizedQuery: string;
   }> {
     try {
@@ -27,7 +27,7 @@ class OpenAIService {
           {
             role: "system",
             content:
-              "You are a Snowflake SQL optimization expert. Analyze the query for performance issues and suggest improvements. Provide specific suggestions and an optimized version of the query. Return the response in JSON format with 'suggestions' as an array of objects with 'title' and 'description', and 'optimizedQuery' as the improved SQL query."
+              "You are a Snowflake SQL optimization expert. Analyze the query for performance issues and suggest improvements. Provide specific suggestions and an optimized version of the query. Return the response in JSON format with 'suggestions' as an array of objects with 'title', 'description', and 'suggestion' fields, and 'optimizedQuery' as the improved SQL query."
           },
           {
             role: "user",
@@ -43,8 +43,16 @@ class OpenAIService {
       }
 
       const result = JSON.parse(content);
+      
+      // Ensure each suggestion has a title, description, and suggestion field
+      const formattedSuggestions = (result.suggestions || []).map((sugg: any) => ({
+        title: sugg.title || "Optimization suggestion",
+        description: sugg.description || "No description provided",
+        suggestion: sugg.suggestion || sugg.description || "No suggestion provided"
+      }));
+      
       return {
-        suggestions: result.suggestions || [],
+        suggestions: formattedSuggestions,
         optimizedQuery: result.optimizedQuery || query
       };
     } catch (error) {
@@ -53,7 +61,8 @@ class OpenAIService {
         suggestions: [
           {
             title: "Error analyzing query",
-            description: "An error occurred while analyzing the query. Please try again."
+            description: "An error occurred while analyzing the query. Please try again.",
+            suggestion: "Try simplifying your query or check for syntax errors before trying again."
           }
         ],
         optimizedQuery: query
