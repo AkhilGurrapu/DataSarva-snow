@@ -23,6 +23,7 @@ import Warehouses from "@/pages/warehouses";
 import CreateWarehouse from "@/pages/create-warehouse";
 import QueryAdvisor from "@/pages/query-advisor";
 import Recommendations from "@/pages/recommendations";
+import Databases from "@/pages/databases";
 import CostDashboard from "@/pages/dashboards/cost";
 import PerformanceDashboard from "@/pages/dashboards/performance";
 
@@ -104,6 +105,11 @@ function AuthRouter() {
         <Route path="/query-advisor" component={() => (
           <ConnectionRequiredWrapper>
             <QueryAdvisor user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/databases" component={() => (
+          <ConnectionRequiredWrapper>
+            <Databases user={user} onLogout={handleLogout} />
           </ConnectionRequiredWrapper>
         )} />
         <Route path="/dashboards/cost" component={() => (

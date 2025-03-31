@@ -166,5 +166,14 @@ export const snowflakeClient = {
       console.error("Failed to fetch warehouse performance data:", error);
       throw new Error("Failed to fetch warehouse performance data. Please try again.");
     }
+  },
+  
+  async getDatabases() {
+    try {
+      return await apiRequest("GET", "/api/snowflake/databases");
+    } catch (error) {
+      console.error("Failed to fetch databases:", error);
+      throw new Error("Failed to fetch databases. Please try again.");
+    }
   }
 };
