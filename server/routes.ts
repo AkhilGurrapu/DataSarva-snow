@@ -279,10 +279,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/query-history", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any).id;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const queryHistory = await storage.getQueryHistoryByUserId(userId, limit);
-      res.json(queryHistory);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      
+      // Get active connection
+      const connections = await storage.getConnectionsByUserId(userId);
+      const activeConnection = connections.find(c => c.isActive);
+      
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active Snowflake connection found" });
+      }
+      
+      try {
+        // Set the role to ACCOUNTADMIN for accessing ACCOUNT_USAGE
+        await snowflakeService.executeQuery(activeConnection, "USE ROLE ACCOUNTADMIN");
+        
+        // Query the ACCOUNT_USAGE.QUERY_HISTORY view
+        const query = `
+          SELECT 
+            QUERY_ID,
+            QUERY_TEXT,
+            START_TIME,
+            WAREHOUSE_NAME,
+            EXECUTION_TIME,
+            COMPILATION_TIME,
+            CREDITS_USED_CLOUD_SERVICES,
+            QUERY_TYPE,
+            DATABASE_NAME,
+            SCHEMA_NAME,
+            EXECUTION_STATUS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            BYTES_SCANNED,
+            ROWS_PRODUCED,
+            COMPILATION_TIME + EXECUTION_TIME AS TOTAL_ELAPSED_TIME,
+            QUEUED_OVERLOAD_TIME
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
+          ORDER BY 
+            START_TIME DESC
+          LIMIT ${limit}
+        `;
+        
+        const result = await snowflakeService.executeQuery(activeConnection, query);
+        
+        if (result && result.results) {
+          return res.json(result.results);
+        } else {
+          return res.json([]);
+        }
+      } catch (snowflakeError: any) {
+        console.error("Error querying Snowflake:", snowflakeError);
+        
+        // If there's an error with Snowflake, fall back to the local storage
+        const queryHistory = await storage.getQueryHistoryByUserId(userId, limit);
+        res.json(queryHistory);
+      }
     } catch (err: any) {
+      console.error("Error in query history endpoint:", err);
       res.status(500).json({ message: err.message });
     }
   });
@@ -453,14 +508,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Query analysis route
   app.post("/api/analyze-query", isAuthenticated, async (req, res) => {
     try {
-      const { query } = req.body;
+      const userId = (req.user as any).id;
+      const { query, connectionId } = req.body;
+      
       if (!query) {
         return res.status(400).json({ message: "Query is required" });
       }
       
+      // Get connections
+      const connections = await storage.getConnectionsByUserId(userId);
+      let activeConnection;
+      
+      if (connectionId) {
+        // If connectionId is provided, use that connection
+        activeConnection = connections.find(c => c.id === parseInt(connectionId));
+      } else {
+        // Otherwise use the active connection
+        activeConnection = connections.find(c => c.isActive);
+      }
+      
+      if (!activeConnection) {
+        return res.status(400).json({ message: "No active Snowflake connection found" });
+      }
+      
+      // Try to analyze the query through OpenAI
       const analysis = await openaiService.analyzeQuery(query);
+      
+      // Save to query history
+      try {
+        const queryHistoryData: any = {
+          userId,
+          connectionId: activeConnection.id,
+          originalQuery: query,
+          optimizedQuery: analysis.optimizedQuery || query,
+          suggestions: analysis.suggestions || []
+        };
+        
+        await storage.createQueryHistory(queryHistoryData);
+      } catch (historyErr) {
+        console.error("Failed to save query history:", historyErr);
+        // Continue even if history saving fails
+      }
+      
       res.json(analysis);
     } catch (err: any) {
+      console.error("Error analyzing query:", err);
       res.status(500).json({ message: err.message });
     }
   });
