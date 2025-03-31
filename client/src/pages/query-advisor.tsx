@@ -343,9 +343,9 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
           </CardContent>
         </Card>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left column - Query Analysis */}
-          <Card>
+          <Card className="lg:col-span-2 xl:col-span-1">
             <CardHeader className="pb-0">
               <CardTitle className="text-lg">Query analysis</CardTitle>
               <CardDescription>
@@ -354,7 +354,7 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
             </CardHeader>
             <CardContent className="p-6">
               <Textarea
-                className="min-h-[100px] font-mono"
+                className="min-h-[250px] font-mono text-sm w-full resize-y"
                 placeholder="Add your query code here..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
@@ -375,7 +375,7 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
           </Card>
           
           {/* Right column - Opportunities */}
-          <div>
+          <div className="lg:col-span-2 xl:col-span-1">
             {analyzingQuery && (
               <div className="flex justify-center items-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
