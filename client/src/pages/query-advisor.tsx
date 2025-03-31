@@ -324,85 +324,91 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="pb-0">
-            <CardTitle className="text-lg">Query analysis</CardTitle>
-            <CardDescription>
-              Enter your query code below to analyze it for optimization opportunities
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <Textarea
-              className="min-h-[100px] font-mono"
-              placeholder="Add your query code here..."
-              value={queryText}
-              onChange={(e) => setQueryText(e.target.value)}
-            />
-            <div className="mt-4 flex justify-end">
-              <Button 
-                onClick={() => handleAnalyzeQuery()}
-                disabled={analyzingQuery || !queryText.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {analyzingQuery ? "Analyzing..." : "Analyze query"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {analyzingQuery && (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-2">Analyzing query...</span>
-          </div>
-        )}
-        
-        {!analyzingQuery && opportunities.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left column - Query Analysis */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center text-lg">
-                <AlertTriangle className="h-5 w-5 mr-2 text-yellow-600" />
-                Opportunity
-              </CardTitle>
+            <CardHeader className="pb-0">
+              <CardTitle className="text-lg">Query analysis</CardTitle>
+              <CardDescription>
+                Enter your query code below to analyze it for optimization opportunities
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {opportunities.map((opportunity, index) => (
-                <div key={`opp-${index}`} className="mb-6 last:mb-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium">{opportunity.title}</h3>
-                    <Badge 
-                      variant="outline" 
-                      className={getSeverityColor(opportunity.severity || 'medium')}
-                    >
-                      {opportunity.severity || 'medium'}
-                    </Badge>
-                  </div>
-                  
-                  {opportunity.location && (
-                    <div className="text-sm mb-2">
-                      <span className="font-medium">Location:</span> Line {opportunity.location.line}, Column {opportunity.location.column}
-                    </div>
-                  )}
-                  
-                  {opportunity.reason && (
-                    <div className="text-sm mb-2">
-                      <span className="font-medium">Reason:</span> {opportunity.reason}
-                    </div>
-                  )}
-                  
-                  <div className="text-sm mb-3">
-                    <p>{opportunity.description}</p>
-                  </div>
-                  
-                  <div className="bg-green-50 p-3 rounded-md border border-green-100 text-sm">
-                    <div className="font-medium text-green-800 mb-1">Suggested fix:</div>
-                    <p className="text-green-700">{opportunity.suggestion}</p>
-                  </div>
-                </div>
-              ))}
+            <CardContent className="p-6">
+              <Textarea
+                className="min-h-[100px] font-mono"
+                placeholder="Add your query code here..."
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+              />
+              <div className="mt-4 flex justify-end">
+                <Button 
+                  onClick={() => handleAnalyzeQuery()}
+                  disabled={analyzingQuery || !queryText.trim()}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {analyzingQuery ? "Analyzing..." : "Analyze query"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        )}
+          
+          {/* Right column - Opportunities */}
+          <div>
+            {analyzingQuery && (
+              <div className="flex justify-center items-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <span className="ml-2">Analyzing query...</span>
+              </div>
+            )}
+            
+            {!analyzingQuery && opportunities.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center text-lg">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-yellow-600" />
+                    Opportunity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {opportunities.map((opportunity, index) => (
+                    <div key={`opp-${index}`} className="mb-6 last:mb-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-medium">{opportunity.title}</h3>
+                        <Badge 
+                          variant="outline" 
+                          className={getSeverityColor(opportunity.severity || 'medium')}
+                        >
+                          {opportunity.severity || 'medium'}
+                        </Badge>
+                      </div>
+                      
+                      {opportunity.location && (
+                        <div className="text-sm mb-2">
+                          <span className="font-medium">Location:</span> Line {opportunity.location.line}, Column {opportunity.location.column}
+                        </div>
+                      )}
+                      
+                      {opportunity.reason && (
+                        <div className="text-sm mb-2">
+                          <span className="font-medium">Reason:</span> {opportunity.reason}
+                        </div>
+                      )}
+                      
+                      <div className="text-sm mb-3">
+                        <p>{opportunity.description}</p>
+                      </div>
+                      
+                      <div className="bg-green-50 p-3 rounded-md border border-green-100 text-sm">
+                        <div className="font-medium text-green-800 mb-1">Suggested fix:</div>
+                        <p className="text-green-700">{opportunity.suggestion}</p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       </div>
     </MainLayout>
   );
