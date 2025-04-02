@@ -26,6 +26,7 @@ import Recommendations from "@/pages/recommendations";
 import Databases from "@/pages/databases";
 import CostDashboard from "@/pages/dashboards/cost";
 import PerformanceDashboard from "@/pages/dashboards/performance";
+import DataObservability from "@/pages/data-observability";
 
 function AuthRouter() {
   const [user, setUser] = useState<any>(null);
@@ -95,6 +96,11 @@ function AuthRouter() {
         <Route path="/create-warehouse" component={() => (
           <ConnectionRequiredWrapper>
             <CreateWarehouse user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/data-observability" component={() => (
+          <ConnectionRequiredWrapper>
+            <DataObservability user={user} onLogout={handleLogout} />
           </ConnectionRequiredWrapper>
         )} />
         <Route path="/recommendations" component={() => (

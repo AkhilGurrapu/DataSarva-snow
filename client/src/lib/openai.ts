@@ -1,56 +1,74 @@
-import { apiRequest } from "./queryClient";
+import { apiRequest } from './queryClient';
 
-// This client-side wrapper communicates with the server-side OpenAI service
 export const openaiClient = {
   async analyzeQuery(connectionId: number, query: string) {
-    try {
-      return await apiRequest("POST", "/api/query-optimize", {
-        connectionId,
-        query
-      });
-    } catch (error) {
-      console.error("Query analysis failed:", error);
-      throw new Error("Failed to analyze query. Please try again.");
-    }
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/analyze-query`, {
+      query,
+    });
+    return response;
   },
 
   async analyzeError(connectionId: number, errorMessage: string, errorCode?: string, errorContext?: string) {
-    try {
-      return await apiRequest("POST", "/api/error-analyze", {
-        connectionId,
-        errorMessage,
-        errorCode,
-        errorContext
-      });
-    } catch (error) {
-      console.error("Error analysis failed:", error);
-      throw new Error("Failed to analyze error. Please try again.");
-    }
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/analyze-error`, {
+      errorMessage,
+      errorCode,
+      errorContext,
+    });
+    return response;
   },
 
   async generateEtlPipeline(
     connectionId: number,
-    name: string,
-    description: string,
-    sourceDescription: string,
-    targetDescription: string,
-    businessRequirements: string,
-    schedule: string
+    sourceTable: string,
+    targetTable: string,
+    transformations: string[]
   ) {
-    try {
-      return await apiRequest("POST", "/api/pipelines", {
-        connectionId,
-        name,
-        description,
-        sourceDescription,
-        targetDescription,
-        businessRequirements,
-        schedule,
-        status: "paused" // Default status for new pipelines
-      });
-    } catch (error) {
-      console.error("ETL pipeline generation failed:", error);
-      throw new Error("Failed to generate ETL pipeline. Please try again.");
-    }
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/generate-etl`, {
+      sourceTable,
+      targetTable,
+      transformations,
+    });
+    return response;
+  },
+
+  async checkDataFreshness(
+    connectionId: number,
+    tableName: string,
+    expectedUpdateFrequency: string
+  ) {
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/check-data-freshness`, {
+      tableName,
+      expectedUpdateFrequency,
+    });
+    return response;
+  },
+
+  async detectAnomalies(
+    connectionId: number,
+    tableName: string
+  ) {
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/detect-anomalies`, {
+      tableName,
+    });
+    return response;
+  },
+
+  async generateDataObservabilityReport(connectionId: number) {
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/generate-observability-report`, {});
+    return response;
+  },
+
+  async monitorTableHealth(connectionId: number, tableName: string) {
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/monitor-table-health`, {
+      tableName,
+    });
+    return response;
+  },
+
+  async getDataQualityScore(connectionId: number, databaseName?: string) {
+    const response = await apiRequest('POST', `/api/snowflake/${connectionId}/get-data-quality-score`, {
+      databaseName,
+    });
+    return response;
   }
 };

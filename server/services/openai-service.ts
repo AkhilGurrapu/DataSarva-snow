@@ -220,6 +220,207 @@ class OpenAIService {
       };
     }
   }
+
+  async analyzeDataFreshness(
+    tableName: string,
+    lastUpdatedTimestamp: string,
+    expectedFrequency: string
+  ): Promise<{
+    status: 'fresh' | 'stale' | 'critical';
+    confidence: number;
+    recommendation: string;
+  }> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a data freshness monitoring expert for Snowflake. Analyze the data freshness and provide insights. Return the response in JSON format with 'status' (one of: 'fresh', 'stale', 'critical'), 'confidence' (a number between 0 and 1), and 'recommendation' fields."
+          },
+          {
+            role: "user",
+            content: `
+              Table: ${tableName}
+              Last Updated: ${lastUpdatedTimestamp}
+              Expected Update Frequency: ${expectedFrequency}
+              
+              Analyze the data freshness and provide a recommendation.
+            `
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) {
+        throw new Error("Failed to get response from OpenAI");
+      }
+
+      const result = JSON.parse(content);
+      return {
+        status: result.status || "stale",
+        confidence: result.confidence || 0.5,
+        recommendation: result.recommendation || "No recommendation provided"
+      };
+    } catch (error) {
+      console.error("OpenAI API error:", error);
+      return {
+        status: "stale",
+        confidence: 0.5,
+        recommendation: "Error during analysis. Please check the data manually."
+      };
+    }
+  }
+
+  async detectDataAnomaly(
+    tableMetrics: {
+      tableName: string;
+      rowCount: number;
+      distinctValues: Record<string, number>;
+      nullPercentages: Record<string, number>;
+      historical?: {
+        avgRowCount: number;
+        avgNullPercentages: Record<string, number>;
+      }
+    }
+  ): Promise<{
+    anomalies: Array<{
+      column?: string;
+      type: string;
+      severity: 'low' | 'medium' | 'high';
+      description: string;
+      recommendation: string;
+    }>;
+    overallHealth: number;
+  }> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a data quality expert for Snowflake. Detect anomalies in the table metrics and provide insights. Return the response in JSON format with 'anomalies' as an array of objects with 'column', 'type', 'severity', 'description', and 'recommendation' fields, and 'overallHealth' as a number between 0 and 1."
+          },
+          {
+            role: "user",
+            content: `
+              Table Metrics: ${JSON.stringify(tableMetrics, null, 2)}
+              
+              Detect anomalies in the table metrics and provide a recommendation.
+            `
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) {
+        throw new Error("Failed to get response from OpenAI");
+      }
+
+      const result = JSON.parse(content);
+      return {
+        anomalies: result.anomalies || [],
+        overallHealth: result.overallHealth || 0.5
+      };
+    } catch (error) {
+      console.error("OpenAI API error:", error);
+      return {
+        anomalies: [{
+          type: "error",
+          severity: "medium",
+          description: "Error during anomaly detection",
+          recommendation: "Please check the data manually."
+        }],
+        overallHealth: 0.5
+      };
+    }
+  }
+
+  async generateDataObservabilityReport(
+    systemData: {
+      tables: Array<{
+        name: string;
+        rowCount: number;
+        lastUpdated: string;
+        schema: string;
+      }>;
+      recentErrors: Array<{
+        message: string;
+        timestamp: string;
+      }>;
+      queryPerformance: {
+        avgExecutionTime: number;
+        slowestQueries: number;
+      };
+    }
+  ): Promise<{
+    summary: string;
+    healthScore: number;
+    criticalIssues: Array<{
+      title: string;
+      description: string;
+      recommendation: string;
+      severity: 'low' | 'medium' | 'high';
+    }>;
+    recommendations: Array<{
+      title: string;
+      description: string;
+      impact: string;
+      effort: 'low' | 'medium' | 'high';
+    }>;
+  }> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a data observability expert for Snowflake. Generate a comprehensive data observability report. Return the response in JSON format with 'summary', 'healthScore', 'criticalIssues', and 'recommendations' fields."
+          },
+          {
+            role: "user",
+            content: `
+              System Data: ${JSON.stringify(systemData, null, 2)}
+              
+              Generate a comprehensive data observability report.
+            `
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) {
+        throw new Error("Failed to get response from OpenAI");
+      }
+
+      const result = JSON.parse(content);
+      return {
+        summary: result.summary || "No summary provided",
+        healthScore: result.healthScore || 0.5,
+        criticalIssues: result.criticalIssues || [],
+        recommendations: result.recommendations || []
+      };
+    } catch (error) {
+      console.error("OpenAI API error:", error);
+      return {
+        summary: "Error generating report",
+        healthScore: 0.5,
+        criticalIssues: [{
+          title: "Error during report generation",
+          description: "There was an error generating the data observability report.",
+          recommendation: "Please try again or contact support.",
+          severity: "medium"
+        }],
+        recommendations: []
+      };
+    }
+  }
 }
 
 export const openaiService = new OpenAIService();
