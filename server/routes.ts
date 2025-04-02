@@ -121,6 +121,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Snowflake connection routes
+  
+  // Test a Snowflake connection without saving it
+  app.post("/api/connections/test", async (req, res) => {
+    try {
+      const connectionData = req.body;
+      
+      // Validate required fields
+      if (!connectionData.account || !connectionData.username || !connectionData.password || 
+          !connectionData.warehouse || !connectionData.role) {
+        return res.status(400).json({
+          message: "Missing required connection parameters"
+        });
+      }
+      
+      // Test the connection
+      try {
+        await snowflakeService.testConnection(connectionData);
+        res.json({ success: true, message: "Connection successful" });
+      } catch (error: any) {
+        res.status(400).json({ 
+          success: false, 
+          message: "Connection failed", 
+          error: error.message 
+        });
+      }
+    } catch (err: any) {
+      console.error("Error testing connection:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: "Connection test failed", 
+        error: err.message 
+      });
+    }
+  });
+  
   app.get("/api/connections", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any).id;

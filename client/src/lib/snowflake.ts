@@ -1,6 +1,18 @@
 import { apiRequest } from './queryClient';
 
 export const snowflakeClient = {
+  async testConnection(connection: {
+    account: string;
+    username: string;
+    password: string;
+    warehouse: string;
+    role: string;
+    database?: string;
+    schema?: string;
+  }) {
+    const response = await apiRequest('POST', '/api/connections/test', connection);
+    return response;
+  },
   async getConnections() {
     const response = await apiRequest('GET', `/api/connections`);
     return response;
