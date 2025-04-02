@@ -41,7 +41,11 @@ export default function ConnectionForm({ onSuccess }: ConnectionFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      // First test the connection
       await snowflakeClient.testConnection(values);
+      
+      // Then create it in the database
+      await snowflakeClient.createConnection(values);
       
       toast({
         title: "Connection created",

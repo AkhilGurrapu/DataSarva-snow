@@ -18,8 +18,25 @@ export const snowflakeClient = {
     return response;
   },
   
+  async createConnection(connection: {
+    name: string;
+    account: string;
+    username: string;
+    password: string;
+    role: string;
+    warehouse: string;
+  }) {
+    const response = await apiRequest('POST', `/api/connections`, connection);
+    return response;
+  },
+  
   async updateConnection(connectionId: number, params: { isActive?: boolean, name?: string }) {
     const response = await apiRequest('PUT', `/api/connections/${connectionId}`, params);
+    return response;
+  },
+  
+  async deleteConnection(connectionId: number) {
+    const response = await apiRequest('DELETE', `/api/connections/${connectionId}`);
     return response;
   },
   async executeQuery(connectionId: number, query: string) {
