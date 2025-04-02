@@ -1,6 +1,15 @@
 import { apiRequest } from './queryClient';
 
 export const snowflakeClient = {
+  async getConnections() {
+    const response = await apiRequest('GET', `/api/connections`);
+    return response;
+  },
+  
+  async updateConnection(connectionId: number, params: { isActive?: boolean, name?: string }) {
+    const response = await apiRequest('PUT', `/api/connections/${connectionId}`, params);
+    return response;
+  },
   async executeQuery(connectionId: number, query: string) {
     const response = await apiRequest('POST', `/api/snowflake/${connectionId}/execute-query`, {
       query,
