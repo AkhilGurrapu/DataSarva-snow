@@ -95,6 +95,12 @@ export default function DataObservability({ user, onLogout }: DataObservabilityP
   return (
     <AppShell user={user} onLogout={onLogout}>
       <div className="container py-6 space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Data Observability</h1>
+          <p className="text-muted-foreground">
+            Monitor your data quality, freshness, and detect anomalies in your Snowflake environment.
+          </p>
+        </div>
         
         {!activeConnection ? (
           <Alert variant="destructive">
