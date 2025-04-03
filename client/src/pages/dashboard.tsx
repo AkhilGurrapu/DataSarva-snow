@@ -203,13 +203,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   return (
     <MainLayout user={user} onLogout={onLogout}>
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your Snowflake data environment
-          </p>
-        </div>
+      <div className="flex justify-end mb-6">
         <Button 
           variant="outline" 
           onClick={fetchDashboardData} 
