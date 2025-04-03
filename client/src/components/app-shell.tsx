@@ -28,30 +28,63 @@ export function AppShell({ children, user, onLogout }: AppShellProps) {
       <Sidebar currentPath={location} />
       
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-sm">
-          <div className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-3">
-            {/* Page title based on current path */}
-            {location === "/" && "Dashboard"}
-            {location === "/warehouses" && "Warehouse Management"}
-            {location === "/databases" && "Database Explorer"}
-            {location === "/recommendations" && "Recommendations"}
-            {location.startsWith("/dashboards") && "Analytics Dashboard"}
-            {location === "/data-observability" && "Data Observability"}
-            {location === "/query-advisor" && "Query Advisor"}
-            {location === "/connections" && "Connection Management"}
-            
-            {/* Show active connection badge */}
-            {activeConnection && !location.includes("/connections") && (
-              <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 flex items-center gap-1.5 px-2.5 py-1">
-                <Database className="h-3 w-3" />
-                <span>{activeConnection.name}</span>
-              </Badge>
+        <header className="bg-white shadow-sm border-b border-gray-100 h-14 flex items-center justify-between px-6">
+          <div className="flex items-center">
+            <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
+              {/* Page title based on current path */}
+              {location === "/" && "Dashboard"}
+              {location === "/warehouses" && "Warehouse Management"}
+              {location === "/databases" && "Database Explorer"}
+              {location === "/recommendations" && "Recommendations"}
+              {location.startsWith("/dashboards") && "Analytics Dashboard"}
+              {location === "/data-observability" && "Data Observability"}
+              {location === "/query-advisor" && "Query Advisor"}
+              {location === "/connections" && "Connection Management"}
+              {location === "/error-analyzer" && "Error Analyzer"}
+              {location === "/performance" && "Performance"}
+            </h1>
+          </div>
+          
+          {/* Connection Selector */}
+          <div className="flex-1 mx-8">
+            {activeConnection ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button 
+                    className="bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 rounded-md px-3 py-1.5 flex items-center gap-2 h-9 max-w-full"
+                  >
+                    <Database className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="truncate max-w-[200px]">{activeConnection.name}</span>
+                    <span className="ml-auto text-blue-600">▼</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[280px]">
+                  {connections.map((conn) => (
+                    <DropdownMenuItem 
+                      key={conn.id}
+                      className={`flex items-center gap-2 ${conn.id === activeConnection.id ? 'bg-blue-50' : ''}`}
+                    >
+                      <Database className="h-4 w-4 text-blue-600" />
+                      <div className="flex-1 truncate">{conn.name}</div>
+                      {conn.id === activeConnection.id && <span className="text-xs text-blue-600">Active</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <button 
+                className="bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 rounded-md px-3 py-1.5 flex items-center gap-2"
+              >
+                <Database className="h-4 w-4 text-blue-600" />
+                Snowflake
+              </button>
             )}
           </div>
           
-          <div className="flex items-center space-x-4">
-            <button className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700">
-              <Bell className="h-5 w-5" />
+          {/* User Profile */}
+          <div className="flex items-center space-x-3">
+            <button className="p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Bell className="w-5 h-5" />
             </button>
             
             <DropdownMenu>

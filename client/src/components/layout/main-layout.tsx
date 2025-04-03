@@ -36,9 +36,20 @@ export default function MainLayout({ children, user, onLogout }: MainLayoutProps
       
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="bg-white shadow-sm border-b border-gray-100 h-14 flex items-center justify-between px-6">
-          <div className="hidden md:flex items-center font-medium">
-            <span className="text-blue-600 mr-1">SnowSarva</span>
-            <span className="text-xs text-gray-500">Powered by DataSarva</span>
+          <div className="flex items-center">
+            <h1 className="text-xl font-semibold text-gray-800">
+              {/* Page title based on current path */}
+              {location === "/" && "Dashboard"}
+              {location === "/warehouses" && "Warehouse Management"}
+              {location === "/databases" && "Database Explorer"}
+              {location === "/recommendations" && "Recommendations"}
+              {location.startsWith("/dashboards") && "Analytics Dashboard"}
+              {location === "/data-observability" && "Data Observability"}
+              {location === "/query-advisor" && "Query Advisor"}
+              {location === "/connections" && "Connection Management"}
+              {location === "/error-analyzer" && "Error Analyzer"}
+              {location === "/performance" && "Performance"}
+            </h1>
           </div>
           
           {/* Connection Selector */}
