@@ -540,7 +540,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Query analysis route
+  // Query analysis routes
+  app.post("/api/snowflake/:connectionId/analyze-query", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { query } = req.body;
+      
+      console.log("Connection-specific query analysis request:", { query: query?.substring(0, 50) + "...", connectionId });
+      
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Try to analyze the query through OpenAI
+      const analysis = await openaiService.analyzeQuery(query);
+      console.log("Analysis result:", { 
+        suggestionCount: analysis.suggestions?.length,
+        hasOptimizedQuery: !!analysis.optimizedQuery
+      });
+      
+      // Save to query history
+      try {
+        const queryHistoryData: any = {
+          userId,
+          connectionId: connectionId,
+          originalQuery: query,
+          optimizedQuery: analysis.optimizedQuery || query,
+          suggestions: JSON.stringify(analysis.suggestions || [])
+        };
+        
+        await storage.createQueryHistory(queryHistoryData);
+        console.log("Query history saved successfully");
+      } catch (historyErr) {
+        console.error("Failed to save query history:", historyErr);
+        // Continue even if history saving fails
+      }
+      
+      res.json(analysis);
+    } catch (err: any) {
+      console.error("Error analyzing query:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Legacy query analysis route
   app.post("/api/analyze-query", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any).id;
@@ -620,6 +675,759 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activityLogs = await storage.getActivityLogs(userId, limit);
       res.json(activityLogs);
     } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // OpenAI integration routes
+  // Error analysis endpoint
+  app.post("/api/snowflake/:connectionId/analyze-error", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { errorMessage, errorCode, errorContext } = req.body;
+      
+      if (!errorMessage) {
+        return res.status(400).json({ message: "Error message is required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Analyze error message using OpenAI
+      const analysis = await openaiService.analyzeErrorLog(errorMessage, errorContext);
+      
+      // Create error log entry
+      try {
+        const errorLogData: any = {
+          userId,
+          connectionId,
+          errorMessage,
+          errorCode: errorCode || null,
+          errorContext: errorContext || null,
+          analysis: JSON.stringify(analysis)
+        };
+        
+        await storage.createErrorLog(errorLogData);
+      } catch (logErr) {
+        console.error("Failed to save error log:", logErr);
+        // Continue even if log saving fails
+      }
+      
+      res.json(analysis);
+    } catch (err: any) {
+      console.error("Error analyzing error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // ETL pipeline generation
+  app.post("/api/snowflake/:connectionId/generate-etl", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { sourceTable, targetTable, transformations } = req.body;
+      
+      if (!sourceTable || !targetTable) {
+        return res.status(400).json({ message: "Source and target tables are required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Get source table schema to provide context for generation
+      let sourceSchema = "";
+      try {
+        const schemaResult = await snowflakeService.getTableSchema(connection, sourceTable);
+        if (schemaResult && Array.isArray(schemaResult)) {
+          sourceSchema = schemaResult.map(col => `${col.COLUMN_NAME} ${col.DATA_TYPE}`).join(", ");
+        }
+      } catch (schemaErr) {
+        console.warn("Could not fetch source schema:", schemaErr);
+      }
+      
+      // Generate ETL pipeline using OpenAI
+      const sourceDescription = `Table: ${sourceTable}${sourceSchema ? `\nSchema: ${sourceSchema}` : ''}`;
+      const targetDescription = `Table: ${targetTable}`;
+      const businessRequirements = Array.isArray(transformations) && transformations.length > 0
+        ? "Transformations:\n" + transformations.join("\n")
+        : "Create an ETL pipeline from source to target";
+        
+      const pipeline = await openaiService.generateEtlPipeline(sourceDescription, targetDescription, businessRequirements);
+      
+      // Save the generated pipeline
+      try {
+        const pipelineData: any = {
+          userId,
+          connectionId,
+          name: `${sourceTable} to ${targetTable}`,
+          description: businessRequirements,
+          sourceTable,
+          targetTable,
+          pipeline: pipeline.pipelineCode,
+          schedule: pipeline.schedulingRecommendations
+        };
+        
+        await storage.createPipeline(pipelineData);
+      } catch (pipelineErr) {
+        console.error("Failed to save pipeline:", pipelineErr);
+      }
+      
+      res.json(pipeline);
+    } catch (err: any) {
+      console.error("Error generating ETL pipeline:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Data freshness checking endpoint
+  app.post("/api/snowflake/:connectionId/check-data-freshness", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { tableName, expectedUpdateFrequency } = req.body;
+      
+      if (!tableName) {
+        return res.status(400).json({ message: "Table name is required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Try to get last updated time from Snowflake
+      let lastUpdated = new Date().toISOString();
+      try {
+        // This query might need to be adapted based on how your tables track last updated time
+        const query = `
+          SELECT 
+            MAX(LAST_ALTERED) as LAST_UPDATED
+          FROM 
+            INFORMATION_SCHEMA.TABLES
+          WHERE 
+            TABLE_NAME = '${tableName.toUpperCase()}'
+        `;
+        
+        const result = await snowflakeService.executeQuery(connection, query);
+        if (result && result.results && result.results.length > 0) {
+          lastUpdated = result.results[0].LAST_UPDATED || result.results[0]["LAST_UPDATED"] || lastUpdated;
+        }
+      } catch (queryErr) {
+        console.warn("Could not fetch last updated time from Snowflake:", queryErr);
+      }
+      
+      // Analyze data freshness using OpenAI
+      const analysis = await openaiService.analyzeDataFreshness(
+        tableName,
+        lastUpdated,
+        expectedUpdateFrequency || "daily"
+      );
+      
+      res.json(analysis);
+    } catch (err: any) {
+      console.error("Error checking data freshness:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Detect anomalies endpoint
+  app.post("/api/snowflake/:connectionId/detect-anomalies", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { tableName } = req.body;
+      
+      if (!tableName) {
+        return res.status(400).json({ message: "Table name is required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Gather data for anomaly detection
+      try {
+        // Get row count
+        const rowCountQuery = `SELECT COUNT(*) as ROW_COUNT FROM ${tableName}`;
+        const rowCountResult = await snowflakeService.executeQuery(connection, rowCountQuery);
+        
+        // Get distinct values for a sample of columns
+        const columnsQuery = `
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = '${tableName.toUpperCase()}'
+          LIMIT 10
+        `;
+        const columnsResult = await snowflakeService.executeQuery(connection, columnsQuery);
+        
+        if (!columnsResult.results || columnsResult.results.length === 0) {
+          return res.status(404).json({ message: "Table not found or has no columns" });
+        }
+        
+        const distinctQueries = columnsResult.results
+          .map((col: any) => {
+            const colName = col.COLUMN_NAME || col["COLUMN_NAME"];
+            return `SELECT COUNT(DISTINCT ${colName}) as DISTINCT_${colName} FROM ${tableName}`;
+          })
+          .join(" UNION ALL ");
+        
+        const distinctResult = await snowflakeService.executeQuery(connection, distinctQueries);
+        
+        // Get null percentages
+        const nullQueries = columnsResult.results
+          .map((col: any) => {
+            const colName = col.COLUMN_NAME || col["COLUMN_NAME"];
+            return `SELECT '${colName}' as COLUMN_NAME, SUM(CASE WHEN ${colName} IS NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as NULL_PERCENTAGE FROM ${tableName}`;
+          })
+          .join(" UNION ALL ");
+        
+        const nullResult = await snowflakeService.executeQuery(connection, nullQueries);
+        
+        // Prepare the table metrics
+        const tableMetrics = {
+          tableName,
+          rowCount: rowCountResult.results && rowCountResult.results[0] ? 
+            Number(rowCountResult.results[0].ROW_COUNT || rowCountResult.results[0]["ROW_COUNT"] || 0) : 0,
+          distinctValues: {},
+          nullPercentages: {}
+        };
+        
+        // Process distinct values
+        if (distinctResult.results) {
+          distinctResult.results.forEach((result: any, index: number) => {
+            const colName = columnsResult.results[index].COLUMN_NAME || columnsResult.results[index]["COLUMN_NAME"];
+            const key = `DISTINCT_${colName}`;
+            tableMetrics.distinctValues[colName] = Number(result[key] || result[key.toUpperCase()] || 0);
+          });
+        }
+        
+        // Process null percentages
+        if (nullResult.results) {
+          nullResult.results.forEach((result: any) => {
+            const colName = result.COLUMN_NAME || result["COLUMN_NAME"];
+            tableMetrics.nullPercentages[colName] = Number(result.NULL_PERCENTAGE || result["NULL_PERCENTAGE"] || 0);
+          });
+        }
+        
+        // Detect anomalies using OpenAI
+        const analysis = await openaiService.detectDataAnomaly(tableMetrics);
+        
+        res.json(analysis);
+      } catch (queryErr: any) {
+        console.error("Error querying table metrics:", queryErr);
+        res.status(500).json({ message: `Error gathering table metrics: ${queryErr.message}` });
+      }
+    } catch (err: any) {
+      console.error("Error detecting anomalies:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Data observability report
+  app.post("/api/snowflake/:connectionId/generate-observability-report", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Gather data for the observability report
+      try {
+        // Get table information
+        const tablesQuery = `
+          SELECT 
+            TABLE_NAME,
+            TABLE_SCHEMA as SCHEMA,
+            ROW_COUNT,
+            LAST_ALTERED as LAST_UPDATED
+          FROM 
+            INFORMATION_SCHEMA.TABLES
+          WHERE 
+            TABLE_TYPE = 'BASE TABLE'
+          ORDER BY
+            LAST_ALTERED DESC
+          LIMIT 20
+        `;
+        
+        const tablesResult = await snowflakeService.executeQuery(connection, tablesQuery);
+        
+        // Get recent errors
+        const errorsQuery = `
+          SELECT 
+            ERROR_MESSAGE,
+            EVENT_TIMESTAMP as TIMESTAMP
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.LOGIN_HISTORY
+          WHERE 
+            IS_SUCCESS = 'NO'
+            AND EVENT_TIMESTAMP >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+          ORDER BY 
+            EVENT_TIMESTAMP DESC
+          LIMIT 10
+        `;
+        
+        const errorsResult = await snowflakeService.executeQuery(connection, errorsQuery);
+        
+        // Get query performance
+        const queryPerformanceQuery = `
+          SELECT 
+            AVG(EXECUTION_TIME) / 1000 as AVG_EXECUTION_TIME,
+            COUNT(CASE WHEN EXECUTION_TIME > 60000 THEN 1 END) as SLOW_QUERIES
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+        `;
+        
+        const queryPerfResult = await snowflakeService.executeQuery(connection, queryPerformanceQuery);
+        
+        // Prepare system data for the report
+        const systemData = {
+          tables: tablesResult.results ? tablesResult.results.map((table: any) => ({
+            name: table.TABLE_NAME || table["TABLE_NAME"],
+            rowCount: Number(table.ROW_COUNT || table["ROW_COUNT"] || 0),
+            lastUpdated: table.LAST_UPDATED || table["LAST_UPDATED"],
+            schema: table.SCHEMA || table["SCHEMA"]
+          })) : [],
+          recentErrors: errorsResult.results ? errorsResult.results.map((error: any) => ({
+            message: error.ERROR_MESSAGE || error["ERROR_MESSAGE"],
+            timestamp: error.TIMESTAMP || error["TIMESTAMP"]
+          })) : [],
+          queryPerformance: {
+            avgExecutionTime: queryPerfResult.results && queryPerfResult.results.length > 0 
+              ? Number(queryPerfResult.results[0].AVG_EXECUTION_TIME || queryPerfResult.results[0]["AVG_EXECUTION_TIME"] || 0)
+              : 0,
+            slowestQueries: queryPerfResult.results && queryPerfResult.results.length > 0
+              ? Number(queryPerfResult.results[0].SLOW_QUERIES || queryPerfResult.results[0]["SLOW_QUERIES"] || 0)
+              : 0
+          }
+        };
+        
+        // Generate observability report using OpenAI
+        const report = await openaiService.generateDataObservabilityReport(systemData);
+        
+        res.json(report);
+      } catch (queryErr: any) {
+        console.error("Error gathering system data:", queryErr);
+        res.status(500).json({ message: `Error gathering system data: ${queryErr.message}` });
+      }
+    } catch (err: any) {
+      console.error("Error generating observability report:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Table health monitoring endpoint
+  app.post("/api/snowflake/:connectionId/monitor-table-health", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { tableName } = req.body;
+      
+      if (!tableName) {
+        return res.status(400).json({ message: "Table name is required" });
+      }
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Gather table health data
+      try {
+        // Check if table exists
+        const tableExistsQuery = `
+          SELECT 
+            TABLE_NAME,
+            ROW_COUNT,
+            LAST_ALTERED,
+            CREATED
+          FROM 
+            INFORMATION_SCHEMA.TABLES
+          WHERE 
+            TABLE_NAME = '${tableName.toUpperCase()}'
+        `;
+        
+        const tableExistsResult = await snowflakeService.executeQuery(connection, tableExistsQuery);
+        
+        if (!tableExistsResult.results || tableExistsResult.results.length === 0) {
+          return res.status(404).json({ message: "Table not found" });
+        }
+        
+        // Get column stats
+        const columnStatsQuery = `
+          SELECT 
+            COLUMN_NAME,
+            DATA_TYPE
+          FROM 
+            INFORMATION_SCHEMA.COLUMNS
+          WHERE 
+            TABLE_NAME = '${tableName.toUpperCase()}'
+        `;
+        
+        const columnStatsResult = await snowflakeService.executeQuery(connection, columnStatsQuery);
+        
+        // Get recent queries against this table
+        const queriesQuery = `
+          SELECT 
+            QUERY_ID,
+            QUERY_TEXT,
+            EXECUTION_TIME / 1000 as EXECUTION_TIME_SECONDS,
+            BYTES_SCANNED / (1024 * 1024) as MB_SCANNED,
+            START_TIME
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+            AND QUERY_TEXT ILIKE '%${tableName}%'
+          ORDER BY 
+            START_TIME DESC
+          LIMIT 10
+        `;
+        
+        const queriesResult = await snowflakeService.executeQuery(connection, queriesQuery);
+        
+        // Calculate null percentages for each column
+        const columns = columnStatsResult.results || [];
+        let nullPercentages = {};
+        
+        if (columns.length > 0) {
+          const nullQueries = columns
+            .map((col: any) => {
+              const colName = col.COLUMN_NAME || col["COLUMN_NAME"];
+              return `SELECT '${colName}' as COLUMN_NAME, SUM(CASE WHEN ${colName} IS NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as NULL_PERCENTAGE FROM ${tableName}`;
+            })
+            .join(" UNION ALL ");
+          
+          const nullResult = await snowflakeService.executeQuery(connection, nullQueries);
+          
+          if (nullResult.results) {
+            nullResult.results.forEach((result: any) => {
+              const colName = result.COLUMN_NAME || result["COLUMN_NAME"];
+              nullPercentages[colName] = Number(result.NULL_PERCENTAGE || result["NULL_PERCENTAGE"] || 0);
+            });
+          }
+        }
+        
+        // Build health report
+        const tableInfo = tableExistsResult.results[0];
+        const healthReport = {
+          tableName,
+          rowCount: Number(tableInfo.ROW_COUNT || tableInfo["ROW_COUNT"] || 0),
+          lastUpdated: tableInfo.LAST_ALTERED || tableInfo["LAST_ALTERED"],
+          created: tableInfo.CREATED || tableInfo["CREATED"],
+          ageInDays: 0,
+          columns: columns.map((col: any) => ({
+            name: col.COLUMN_NAME || col["COLUMN_NAME"],
+            dataType: col.DATA_TYPE || col["DATA_TYPE"],
+            nullPercentage: nullPercentages[col.COLUMN_NAME || col["COLUMN_NAME"]] || 0
+          })),
+          recentQueries: (queriesResult.results || []).map((query: any) => ({
+            queryId: query.QUERY_ID || query["QUERY_ID"],
+            text: query.QUERY_TEXT || query["QUERY_TEXT"],
+            executionTime: Number(query.EXECUTION_TIME_SECONDS || query["EXECUTION_TIME_SECONDS"] || 0),
+            mbScanned: Number(query.MB_SCANNED || query["MB_SCANNED"] || 0),
+            startTime: query.START_TIME || query["START_TIME"]
+          })),
+          healthScore: 0,
+          issues: [],
+          recommendations: []
+        };
+        
+        // Calculate age in days
+        const created = new Date(tableInfo.CREATED || tableInfo["CREATED"]);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - created.getTime());
+        healthReport.ageInDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Calculate health score and identify issues
+        let healthScore = 100;
+        const issues = [];
+        const recommendations = [];
+        
+        // Check row count
+        if (healthReport.rowCount === 0) {
+          healthScore -= 30;
+          issues.push("Table is empty");
+          recommendations.push("Investigate why the table has no data");
+        }
+        
+        // Check null percentages
+        const columnsWithHighNulls = healthReport.columns
+          .filter(col => col.nullPercentage > 20)
+          .map(col => col.name);
+          
+        if (columnsWithHighNulls.length > 0) {
+          healthScore -= Math.min(5 * columnsWithHighNulls.length, 30);
+          issues.push(`High null values in columns: ${columnsWithHighNulls.join(", ")}`);
+          recommendations.push("Review data quality for columns with high null percentages");
+        }
+        
+        // Check last updated
+        const lastUpdated = new Date(healthReport.lastUpdated);
+        const daysSinceUpdate = Math.ceil(Math.abs(now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceUpdate > 30) {
+          healthScore -= 20;
+          issues.push(`Table hasn't been updated in ${daysSinceUpdate} days`);
+          recommendations.push("Verify if the table should be receiving regular updates");
+        }
+        
+        // Finalize health report
+        healthReport.healthScore = Math.max(0, healthScore);
+        healthReport.issues = issues;
+        healthReport.recommendations = recommendations;
+        
+        res.json(healthReport);
+      } catch (queryErr: any) {
+        console.error("Error gathering table health data:", queryErr);
+        res.status(500).json({ message: `Error gathering table health data: ${queryErr.message}` });
+      }
+    } catch (err: any) {
+      console.error("Error monitoring table health:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Data quality score endpoint
+  app.post("/api/snowflake/:connectionId/get-data-quality-score", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId);
+      const { databaseName } = req.body;
+      
+      // Get the specific connection
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // Set database context if provided
+      if (databaseName) {
+        await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+      }
+      
+      // Gather data quality metrics
+      try {
+        // Get overall table stats
+        const tableStatsQuery = `
+          SELECT 
+            COUNT(*) as TABLE_COUNT,
+            AVG(ROW_COUNT) as AVG_ROW_COUNT
+          FROM 
+            INFORMATION_SCHEMA.TABLES
+          WHERE 
+            TABLE_TYPE = 'BASE TABLE'
+        `;
+        
+        const tableStatsResult = await snowflakeService.executeQuery(connection, tableStatsQuery);
+        
+        // Sample tables to check for null values and distinct counts
+        const sampleTablesQuery = `
+          SELECT 
+            TABLE_NAME,
+            ROW_COUNT
+          FROM 
+            INFORMATION_SCHEMA.TABLES
+          WHERE 
+            TABLE_TYPE = 'BASE TABLE'
+            AND ROW_COUNT > 0
+          ORDER BY
+            ROW_COUNT DESC
+          LIMIT 10
+        `;
+        
+        const sampleTablesResult = await snowflakeService.executeQuery(connection, sampleTablesQuery);
+        
+        // Initialize metrics
+        const metrics = {
+          tableCount: tableStatsResult.results && tableStatsResult.results.length > 0 
+            ? Number(tableStatsResult.results[0].TABLE_COUNT || tableStatsResult.results[0]["TABLE_COUNT"] || 0)
+            : 0,
+          avgRowCount: tableStatsResult.results && tableStatsResult.results.length > 0
+            ? Number(tableStatsResult.results[0].AVG_ROW_COUNT || tableStatsResult.results[0]["AVG_ROW_COUNT"] || 0)
+            : 0,
+          tablesWithIssues: 0,
+          nullPercentage: 0,
+          duplicatePercentage: 0,
+          incompleteRows: 0,
+          tableScores: [] as Array<{ name: string, score: number, issues: string[] }>
+        };
+        
+        // Check a sample of tables for data quality issues
+        if (sampleTablesResult.results && sampleTablesResult.results.length > 0) {
+          for (const table of sampleTablesResult.results) {
+            const tableName = table.TABLE_NAME || table["TABLE_NAME"];
+            
+            // Get column info for this table
+            const columnsQuery = `
+              SELECT COLUMN_NAME 
+              FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_NAME = '${tableName}'
+              LIMIT 5
+            `;
+            
+            const columnsResult = await snowflakeService.executeQuery(connection, columnsQuery);
+            
+            if (!columnsResult.results || columnsResult.results.length === 0) continue;
+            
+            const columns = columnsResult.results.map((col: any) => col.COLUMN_NAME || col["COLUMN_NAME"]);
+            
+            // Check null percentages
+            const nullQuery = `
+              SELECT 
+                ${columns.map(col => `SUM(CASE WHEN ${col} IS NULL THEN 1 ELSE 0 END) / COUNT(*) * 100 as ${col}_NULL_PCT`).join(',')}
+              FROM ${tableName}
+            `;
+            
+            const nullResult = await snowflakeService.executeQuery(connection, nullQuery);
+            
+            // Check for duplicates on the first column
+            let duplicatePct = 0;
+            if (columns.length > 0) {
+              const dupQuery = `
+                SELECT 
+                  100.0 * COUNT(*) / (SELECT COUNT(*) FROM ${tableName}) as DUPLICATE_PCT
+                FROM (
+                  SELECT ${columns[0]}, COUNT(*) as CNT
+                  FROM ${tableName}
+                  GROUP BY ${columns[0]}
+                  HAVING COUNT(*) > 1
+                )
+              `;
+              
+              const dupResult = await snowflakeService.executeQuery(connection, dupQuery);
+              if (dupResult.results && dupResult.results.length > 0) {
+                duplicatePct = Number(dupResult.results[0].DUPLICATE_PCT || dupResult.results[0]["DUPLICATE_PCT"] || 0);
+              }
+            }
+            
+            // Calculate table quality score and issues
+            let tableScore = 100;
+            const tableIssues = [];
+            
+            // Check null percentages
+            if (nullResult.results && nullResult.results.length > 0) {
+              const nullPcts = columns.map(col => Number(nullResult.results[0][`${col}_NULL_PCT`] || nullResult.results[0][`${col}_NULL_PCT`.toUpperCase()] || 0));
+              const avgNullPct = nullPcts.reduce((sum, pct) => sum + pct, 0) / nullPcts.length;
+              
+              metrics.nullPercentage += avgNullPct;
+              
+              if (avgNullPct > 10) {
+                tableScore -= Math.min(avgNullPct, 30);
+                tableIssues.push(`High null values: ${avgNullPct.toFixed(1)}%`);
+              }
+            }
+            
+            // Check duplicates
+            if (duplicatePct > 5) {
+              tableScore -= Math.min(duplicatePct, 20);
+              tableIssues.push(`Potential duplicates: ${duplicatePct.toFixed(1)}%`);
+              metrics.duplicatePercentage += duplicatePct;
+            }
+            
+            metrics.tableScores.push({
+              name: tableName,
+              score: Math.max(0, Math.round(tableScore)),
+              issues: tableIssues
+            });
+            
+            if (tableIssues.length > 0) {
+              metrics.tablesWithIssues++;
+            }
+          }
+        }
+        
+        // Calculate averages
+        if (metrics.tableScores.length > 0) {
+          metrics.nullPercentage /= metrics.tableScores.length;
+          metrics.duplicatePercentage /= metrics.tableScores.length;
+        }
+        
+        // Calculate overall score
+        const tableScoreSum = metrics.tableScores.reduce((sum, table) => sum + table.score, 0);
+        const overallScore = metrics.tableScores.length > 0 
+          ? Math.round(tableScoreSum / metrics.tableScores.length)
+          : 75; // Default score if no tables were analyzed
+        
+        // Format response
+        const response = {
+          overallScore,
+          metrics,
+          summary: `Analyzed ${metrics.tableScores.length} tables with an average score of ${overallScore}%`,
+          recommendations: []
+        };
+        
+        // Generate recommendations
+        if (metrics.nullPercentage > 10) {
+          response.recommendations.push("Implement data validation to reduce NULL values");
+        }
+        
+        if (metrics.duplicatePercentage > 5) {
+          response.recommendations.push("Review data ingestion processes to prevent duplicates");
+        }
+        
+        if (metrics.tablesWithIssues > 0) {
+          response.recommendations.push(`Address data quality issues in ${metrics.tablesWithIssues} tables`);
+        }
+        
+        res.json(response);
+      } catch (queryErr: any) {
+        console.error("Error gathering data quality metrics:", queryErr);
+        res.status(500).json({ message: `Error gathering data quality metrics: ${queryErr.message}` });
+      }
+    } catch (err: any) {
+      console.error("Error getting data quality score:", err);
       res.status(500).json({ message: err.message });
     }
   });
