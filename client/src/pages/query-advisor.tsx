@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { snowflakeClient } from "../lib/snowflake";
+import { openaiClient } from "../lib/openai";
 import { useConnection } from "../hooks/use-connection";
 import { useToast } from "../hooks/use-toast";
 
@@ -153,8 +154,17 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
     setCopied(false);
     
     try {
-      // Call the analyze-query endpoint
-      const analysis = await snowflakeClient.analyzeQuery(queryToProcess);
+      // Call the analyze-query endpoint using the OpenAI client
+      if (!activeConnection) {
+        toast({
+          title: "No active connection",
+          description: "Please select an active Snowflake connection first.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const analysis = await openaiClient.analyzeQuery(activeConnection.id, queryToProcess);
       console.log("Analysis response:", analysis);
       
       if (analysis && analysis.suggestions) {

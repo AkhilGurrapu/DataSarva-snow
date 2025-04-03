@@ -48,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPath }) => {
           <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold mr-2">
             <span>S</span>
           </div>
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">SnowAutoPilot</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">SnowSarva</h2>
         </div>
         
         <nav className="space-y-1 flex-1">
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPath }) => {
           </div>
           <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 flex items-center">
             <div className="w-6 h-6 rounded-md bg-blue-600 mr-2"></div>
-            <span>Snowflake & OpenAI</span>
+            <span>DataSarva</span>
           </div>
         </div>
       </div>

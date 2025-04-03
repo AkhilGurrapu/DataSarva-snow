@@ -1,10 +1,12 @@
 import React from "react";
 import { useLocation, Link } from "wouter";
-import { LogOut, User, Bell, Settings } from "lucide-react";
+import { LogOut, User, Bell, Settings, Database } from "lucide-react";
 import Sidebar from "./layout/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Toaster } from "@/components/ui/toaster";
+import { useConnection } from "@/hooks/use-connection";
+import { Badge } from "@/components/ui/badge";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -14,6 +16,7 @@ type AppShellProps = {
 
 export function AppShell({ children, user, onLogout }: AppShellProps) {
   const [location] = useLocation();
+  const { activeConnection, connections } = useConnection();
   
   const getUserInitials = () => {
     if (!user || !user.username) return "U";
@@ -26,7 +29,7 @@ export function AppShell({ children, user, onLogout }: AppShellProps) {
       
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-sm">
-          <div className="text-xl font-semibold text-gray-800 dark:text-white">
+          <div className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-3">
             {/* Page title based on current path */}
             {location === "/" && "Dashboard"}
             {location === "/warehouses" && "Warehouse Management"}
@@ -36,6 +39,14 @@ export function AppShell({ children, user, onLogout }: AppShellProps) {
             {location === "/data-observability" && "Data Observability"}
             {location === "/query-advisor" && "Query Advisor"}
             {location === "/connections" && "Connection Management"}
+            
+            {/* Show active connection badge */}
+            {activeConnection && !location.includes("/connections") && (
+              <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 flex items-center gap-1.5 px-2.5 py-1">
+                <Database className="h-3 w-3" />
+                <span>{activeConnection.name}</span>
+              </Badge>
+            )}
           </div>
           
           <div className="flex items-center space-x-4">

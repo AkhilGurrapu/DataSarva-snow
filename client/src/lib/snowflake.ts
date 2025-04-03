@@ -71,14 +71,28 @@ export const snowflakeClient = {
     return response;
   },
 
-  async getWarehouses(connectionId: number) {
-    const response = await apiRequest('GET', `/api/snowflake/${connectionId}/warehouses`);
-    return response;
+  async getWarehouses(connectionId?: number) {
+    if (connectionId) {
+      // If a specific connectionId is provided, use the connection-specific endpoint
+      const response = await apiRequest('GET', `/api/snowflake/${connectionId}/warehouses`);
+      return response;
+    } else {
+      // Otherwise use the endpoint that gets warehouses for the active connection
+      const response = await apiRequest('GET', `/api/warehouses`);
+      return response;
+    }
   },
 
-  async getQueryHistory(connectionId: number) {
-    const response = await apiRequest('GET', `/api/snowflake/${connectionId}/query-history`);
-    return response;
+  async getQueryHistory(connectionId?: number) {
+    if (connectionId) {
+      // If a specific connectionId is provided, use the connection-specific endpoint
+      const response = await apiRequest('GET', `/api/snowflake/${connectionId}/query-history`);
+      return response;
+    } else {
+      // Otherwise use the endpoint that gets query history for the active connection
+      const response = await apiRequest('GET', `/api/query-history`);
+      return response;
+    }
   },
   
   async getWarehouseMetrics(connectionId: number, warehouseName: string) {
