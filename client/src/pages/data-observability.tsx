@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, AlertTriangle, CheckCircle, FileText, Database, Clock, RefreshCw } from "lucide-react";
-import { AppShell } from "../components/app-shell";
+import MainLayout from "@/components/layout/main-layout";
 import { FreshnessMonitor } from "@/components/data-monitoring/freshness-monitor";
 import { AnomalyDetector } from "@/components/data-monitoring/anomaly-detector";
 
@@ -93,13 +93,11 @@ export default function DataObservability({ user, onLogout }: DataObservabilityP
   }
   
   return (
-    <AppShell user={user} onLogout={onLogout}>
-      <div className="container py-6 space-y-6">
-        <div className="flex flex-col gap-2">
-          <p className="text-muted-foreground">
-            Monitor your data quality, freshness, and detect anomalies in your Snowflake environment.
-          </p>
-        </div>
+    <MainLayout user={user} onLogout={onLogout}>
+      <div className="py-4 space-y-6">
+        <p className="text-gray-600">
+          Monitor your data quality, freshness, and detect anomalies in your Snowflake environment.
+        </p>
         
         {!activeConnection ? (
           <Alert variant="destructive">
@@ -322,6 +320,6 @@ export default function DataObservability({ user, onLogout }: DataObservabilityP
           </Tabs>
         )}
       </div>
-    </AppShell>
+    </MainLayout>
   );
 }
