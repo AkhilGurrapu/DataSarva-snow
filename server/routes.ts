@@ -734,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const connectionId = parseInt(req.params.connectionId);
-      const { sourceTable, targetTable, transformations } = req.body;
+      const { sourceTable, targetTable, transformations, databaseName } = req.body;
       
       if (!sourceTable || !targetTable) {
         return res.status(400).json({ message: "Source and target tables are required" });
@@ -749,6 +749,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (connection.userId !== userId) {
         return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Get source table schema to provide context for generation
@@ -801,7 +833,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const connectionId = parseInt(req.params.connectionId);
-      const { tableName, expectedUpdateFrequency } = req.body;
+      const { tableName, expectedUpdateFrequency, databaseName } = req.body;
       
       if (!tableName) {
         return res.status(400).json({ message: "Table name is required" });
@@ -816,6 +848,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (connection.userId !== userId) {
         return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Try to get last updated time from Snowflake
@@ -858,7 +922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const connectionId = parseInt(req.params.connectionId);
-      const { tableName } = req.body;
+      const { tableName, databaseName } = req.body;
       
       if (!tableName) {
         return res.status(400).json({ message: "Table name is required" });
@@ -873,6 +937,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (connection.userId !== userId) {
         return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Gather data for anomaly detection
@@ -958,6 +1054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const connectionId = parseInt(req.params.connectionId);
+      const { databaseName } = req.body;
       
       // Get the specific connection
       const connection = await storage.getConnection(connectionId);
@@ -968,6 +1065,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (connection.userId !== userId) {
         return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Gather data for the observability report
@@ -1061,7 +1190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const connectionId = parseInt(req.params.connectionId);
-      const { tableName } = req.body;
+      const { tableName, databaseName } = req.body;
       
       if (!tableName) {
         return res.status(400).json({ message: "Table name is required" });
@@ -1076,6 +1205,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (connection.userId !== userId) {
         return res.status(403).json({ message: "You don't have access to this connection" });
+      }
+      
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Gather table health data
@@ -1252,9 +1413,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You don't have access to this connection" });
       }
       
-      // Set database context if provided
-      if (databaseName) {
-        await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+      // First, get available databases if no database name is provided
+      if (!databaseName) {
+        try {
+          const dbResult = await snowflakeService.executeQuery(connection, "SHOW DATABASES");
+          
+          if (dbResult.results && dbResult.results.length > 0) {
+            // Use the first available database
+            const firstDb = dbResult.results[0].name || dbResult.results[0].NAME || dbResult.results[0]["name"] || dbResult.results[0]["NAME"];
+            
+            if (firstDb) {
+              console.log(`No database specified, using first available database: ${firstDb}`);
+              await snowflakeService.executeQuery(connection, `USE DATABASE ${firstDb}`);
+            } else {
+              return res.status(400).json({ message: "No databases available in this Snowflake account" });
+            }
+          } else {
+            return res.status(400).json({ message: "No databases available in this Snowflake account" });
+          }
+        } catch (dbErr) {
+          console.error("Error getting database list:", dbErr);
+          return res.status(500).json({ message: "Failed to get database list. Please specify a database name" });
+        }
+      } else {
+        // Set database context if provided
+        try {
+          await snowflakeService.executeQuery(connection, `USE DATABASE ${databaseName}`);
+        } catch (useErr) {
+          console.error(`Error using database ${databaseName}:`, useErr);
+          return res.status(400).json({ message: `Database ${databaseName} not found or not accessible` });
+        }
       }
       
       // Gather data quality metrics
