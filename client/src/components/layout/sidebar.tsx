@@ -8,10 +8,8 @@ import {
   BarChart3, 
   Settings, 
   Server, 
-  AlertCircle, 
   Activity,
   Eye,
-  BookOpen,
   Snowflake,
   Sparkles
 } from 'lucide-react';
@@ -33,23 +31,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPath }) => {
     { path: '/', label: 'Dashboard', icon: <Home className="h-4 w-4" /> },
     { path: '/data-observability', label: 'Data Observability', icon: <Eye className="h-4 w-4" /> },
     { path: '/query-advisor', label: 'Query Advisor', icon: <Search className="h-4 w-4" /> },
-    { path: '/error-analyzer', label: 'Error Analyzer', icon: <AlertCircle className="h-4 w-4" /> },
   ];
   
   const resourceLinks = [
     { path: '/databases', label: 'Databases', icon: <Database className="h-4 w-4" /> },
     { path: '/warehouses', label: 'Warehouses', icon: <Server className="h-4 w-4" /> },
-    { path: '/performance', label: 'Performance', icon: <Activity className="h-4 w-4" /> },
   ];
 
   const insightLinks = [
     { path: '/recommendations', label: 'Recommendations', icon: <Gauge className="h-4 w-4" /> },
-    { path: '/dashboards', label: 'Analytics', icon: <BarChart3 className="h-4 w-4" /> },
+    { path: '/dashboards/cost', label: 'Cost Dashboard', icon: <BarChart3 className="h-4 w-4" /> },
+    { path: '/dashboards/performance', label: 'Performance', icon: <Activity className="h-4 w-4" /> },
   ];
   
   const settingsLinks = [
-    { path: '/connections', label: 'Connections', icon: <Settings className="h-4 w-4" /> },
-    { path: '/documentation', label: 'Documentation', icon: <BookOpen className="h-4 w-4" /> }
+    { path: '/connections', label: 'Connections', icon: <Settings className="h-4 w-4" /> }
   ];
 
   return (

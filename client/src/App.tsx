@@ -134,33 +134,12 @@ function AuthRouter() {
           </ConnectionRequiredWrapper>
         )} />
         
-        {/* Legacy UI Routes */}
-        <Route path="/old-dashboard" component={() => (
-          <ConnectionRequiredWrapper>
-            <Dashboard user={user} onLogout={handleLogout} />
-          </ConnectionRequiredWrapper>
-        )} />
-        <Route path="/query-optimizer" component={() => (
-          <ConnectionRequiredWrapper>
-            <QueryOptimizer user={user} onLogout={handleLogout} />
-          </ConnectionRequiredWrapper>
-        )} />
-        <Route path="/performance" component={() => (
-          <ConnectionRequiredWrapper>
-            <Performance user={user} onLogout={handleLogout} />
-          </ConnectionRequiredWrapper>
-        )} />
-        <Route path="/debugging" component={() => (
-          <ConnectionRequiredWrapper>
-            <Debugging user={user} onLogout={handleLogout} />
-          </ConnectionRequiredWrapper>
-        )} />
-        <Route path="/snowflake-test" component={() => (
-          <ConnectionRequiredWrapper>
-            <SnowflakeTest user={user} onLogout={handleLogout} />
-          </ConnectionRequiredWrapper>
-        )} />
-        
+        {/* Redirect /dashboards to the cost dashboard */}
+        <Route path="/dashboards" component={() => {
+          setLocation("/dashboards/cost");
+          return null;
+        }} />
+                
         <Route path="/login" component={() => <Login onLogin={setUser} />} />
         <Route component={NotFound} />
       </Switch>

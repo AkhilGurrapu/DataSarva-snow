@@ -47,8 +47,7 @@ export default function MainLayout({ children, user, onLogout }: MainLayoutProps
               {location === "/data-observability" && "Data Observability"}
               {location === "/query-advisor" && "Query Advisor"}
               {location === "/connections" && "Connection Management"}
-              {location === "/error-analyzer" && "Error Analyzer"}
-              {location === "/performance" && "Performance"}
+              {location.startsWith("/dashboards/performance") && "Performance Dashboard"}
             </h1>
           </div>
           

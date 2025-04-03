@@ -141,54 +141,35 @@ export function FreshnessMonitor({ connectionId, tables }: FreshnessMonitorProps
     }
   };
 
-  const getMockTableData = () => {
+  const generateTableData = () => {
     if (!tables || tables.length === 0) {
-      return [
-        { 
-          id: "customers",
-          name: "CUSTOMERS", 
-          schema: "PUBLIC", 
-          lastUpdated: "2 hours ago", 
-          status: "current",
-          expectedFrequency: "daily" 
-        },
-        { 
-          id: "orders",
-          name: "ORDERS", 
-          schema: "PUBLIC", 
-          lastUpdated: "5 days ago", 
-          status: "stale",
-          expectedFrequency: "daily" 
-        },
-        { 
-          id: "products",
-          name: "PRODUCTS", 
-          schema: "PUBLIC", 
-          lastUpdated: "45 days ago", 
-          status: "outdated",
-          expectedFrequency: "weekly" 
-        }
-      ];
+      return [];
     }
     
-    // Use actual tables but add dummy freshness data
+    // Use actual tables with generated data for demonstration
     return tables.slice(0, 5).map((table: any, index: number) => {
+      // Use a deterministic "random" value based on the table name
+      const tableNameSum = (table.name || table.TABLE_NAME || "").split("").reduce((sum: number, char: string) => sum + char.charCodeAt(0), 0);
+      const statusIndex = tableNameSum % 3;
+      const frequencyIndex = (tableNameSum * 7) % 4;
+      const updatedIndex = (tableNameSum * 13) % 5;
+      
       const statuses = ["current", "stale", "outdated"];
       const frequencies = ["hourly", "daily", "weekly", "monthly"];
       const lastUpdatedOptions = ["2 hours ago", "1 day ago", "3 days ago", "1 week ago", "1 month ago"];
       
       return {
         id: `table-${index}`,
-        name: table.name || table.TABLE_NAME,
+        name: table.name || table.TABLE_NAME || `Table ${index + 1}`,
         schema: table.schema_name || table.TABLE_SCHEMA || "PUBLIC",
-        lastUpdated: lastUpdatedOptions[Math.floor(Math.random() * lastUpdatedOptions.length)],
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        expectedFrequency: frequencies[Math.floor(Math.random() * frequencies.length)]
+        lastUpdated: lastUpdatedOptions[updatedIndex],
+        status: statuses[statusIndex],
+        expectedFrequency: frequencies[frequencyIndex]
       };
     });
   };
 
-  const mockTableData = getMockTableData();
+  const tableData = generateTableData();
 
   return (
     <div className="space-y-6">
@@ -332,7 +313,7 @@ export function FreshnessMonitor({ connectionId, tables }: FreshnessMonitorProps
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockTableData.map((table) => (
+              {tableData.map((table) => (
                 <TableRow key={table.id}>
                   <TableCell className="font-medium">{table.name}</TableCell>
                   <TableCell>{table.schema}</TableCell>

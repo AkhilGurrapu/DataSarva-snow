@@ -103,39 +103,8 @@ export function AnomalyDetector({ connectionId, tables }: AnomalyDetectorProps) 
     return "bg-red-500";
   }
 
-  // Generate mock anomaly data for initial display
-  const mockAnomalies = [
-    {
-      id: 1,
-      column: "order_total",
-      type: "outlier",
-      description: "Unusually high order values detected",
-      severity: "high",
-      detectedAt: "2023-05-15T14:32:00Z",
-      affectedRows: 24,
-      recommendation: "Investigate transactions above $10,000"
-    },
-    {
-      id: 2,
-      column: "user_signups",
-      type: "drop",
-      description: "Significant drop in daily user signups",
-      severity: "medium",
-      detectedAt: "2023-05-14T09:15:00Z",
-      affectedRows: 0,
-      recommendation: "Check registration process and marketing campaigns"
-    },
-    {
-      id: 3,
-      column: "delivery_time",
-      type: "pattern break",
-      description: "Delivery times no longer follow typical weekly patterns",
-      severity: "low",
-      detectedAt: "2023-05-13T11:45:00Z",
-      affectedRows: 156,
-      recommendation: "Review logistic processes for recent changes"
-    }
-  ];
+  // Initially empty until detection is performed
+  const initialAnomalies: any[] = [];
 
   return (
     <div className="space-y-6">
@@ -216,9 +185,9 @@ export function AnomalyDetector({ connectionId, tables }: AnomalyDetectorProps) 
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {(anomalyResult?.anomalies || mockAnomalies).length > 0 ? (
+            {(anomalyResult?.anomalies || initialAnomalies).length > 0 ? (
               <div className="space-y-4">
-                {(anomalyResult?.anomalies || mockAnomalies).map((anomaly: any, index: number) => (
+                {(anomalyResult?.anomalies || initialAnomalies).map((anomaly: any, index: number) => (
                   <div key={anomaly.id || index} className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-2">
@@ -273,7 +242,7 @@ export function AnomalyDetector({ connectionId, tables }: AnomalyDetectorProps) 
                 <div className="relative w-32 h-32">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-3xl font-bold">
-                      {anomalyResult?.healthScore || 85}%
+                      {anomalyResult?.healthScore || 0}%
                     </span>
                   </div>
                   <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -292,7 +261,7 @@ export function AnomalyDetector({ connectionId, tables }: AnomalyDetectorProps) 
                       fill="none" 
                       stroke={anomalyResult?.healthScore >= 80 ? "#10b981" : anomalyResult?.healthScore >= 60 ? "#f59e0b" : "#ef4444"} 
                       strokeWidth="8"
-                      strokeDasharray={`${2.5 * Math.PI * 40 * (anomalyResult?.healthScore || 85) / 100} ${2.5 * Math.PI * 40 * (100 - (anomalyResult?.healthScore || 85)) / 100}`}
+                      strokeDasharray={`${2.5 * Math.PI * 40 * (anomalyResult?.healthScore || 0) / 100} ${2.5 * Math.PI * 40 * (100 - (anomalyResult?.healthScore || 0)) / 100}`}
                       strokeLinecap="round"
                       transform="rotate(-90 50 50)"
                     />
@@ -307,21 +276,21 @@ export function AnomalyDetector({ connectionId, tables }: AnomalyDetectorProps) 
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Recent anomalies</span>
                   <span className="font-medium">
-                    {anomalyResult?.anomaliesCount || mockAnomalies.length}
+                    {anomalyResult?.anomaliesCount || 0}
                   </span>
                 </div>
                 
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Last scan</span>
                   <span className="text-sm text-muted-foreground">
-                    {anomalyResult?.lastScanTime || "Today, 10:45 AM"}
+                    {anomalyResult?.lastScanTime || "No scans yet"}
                   </span>
                 </div>
                 
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Critical alerts</span>
                   <span className="font-medium text-red-600">
-                    {anomalyResult?.criticalAnomalies || 1}
+                    {anomalyResult?.criticalAnomalies || 0}
                   </span>
                 </div>
               </div>
