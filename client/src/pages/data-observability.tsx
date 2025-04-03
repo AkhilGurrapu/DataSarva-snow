@@ -31,11 +31,14 @@ export default function DataObservability({ user, onLogout }: DataObservabilityP
   const [qualityReport, setQualityReport] = useState<any>(null);
   
   // Fetch tables from connection
-  const { data: tables = [], isLoading: tablesLoading, error: tablesError } = useQuery({
+  const { data: tablesData = [], isLoading: tablesLoading, error: tablesError } = useQuery({
     queryKey: ['/api/snowflake/account-usage/tables', activeConnection?.id],
     enabled: !!activeConnection,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+  
+  // Ensure tables is always an array
+  const tables = Array.isArray(tablesData) ? tablesData : [];
   
   async function generateHealthReport() {
     if (!activeConnection) return;
@@ -43,7 +46,21 @@ export default function DataObservability({ user, onLogout }: DataObservabilityP
     try {
       setLoadingReport(true);
       
-      const result = await openaiClient.getDataQualityScore(activeConnection.id);
+      // Get the first available database from the list of tables
+      let databaseName;
+      if (Array.isArray(tables) && tables.length > 0) {
+        const table = tables[0];
+        // Try to extract database name from the table info
+        if (table && typeof table === 'object') {
+          if ('database' in table) {
+            databaseName = table.database;
+          } else if ('DATABASE_NAME' in table) {
+            databaseName = table.DATABASE_NAME;
+          }
+        }
+      }
+      
+      const result = await openaiClient.getDataQualityScore(activeConnection.id, databaseName);
       setQualityReport(result);
       
       toast({

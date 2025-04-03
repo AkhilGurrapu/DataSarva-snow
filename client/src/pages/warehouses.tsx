@@ -91,7 +91,12 @@ export default function Warehouses({ user, onLogout }: WarehousesProps) {
     <MainLayout user={user} onLogout={onLogout}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-medium text-gray-800">My warehouses</h1>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">My Warehouses</h1>
+            <p className="text-muted-foreground">
+              Manage your Snowflake compute warehouses and monitor performance
+            </p>
+          </div>
           <div className="flex space-x-2">
             <Button className="bg-blue-600 hover:bg-blue-700">
               <PlusCircle className="h-4 w-4 mr-2" />

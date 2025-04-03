@@ -260,9 +260,9 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
   return (
     <MainLayout user={user} onLogout={onLogout}>
       <div className="flex flex-col space-y-6">
-        <div>
-          <h1 className="text-2xl font-medium text-gray-800">Query Advisor</h1>
-          <p className="text-gray-600 mt-1">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Query Advisor</h1>
+          <p className="text-muted-foreground">
             This tool analyzes your organization's Snowflake queries and surfaces opportunities to clean up SQL 
             keywords and operators, so the query can process more efficiently. Enter query text into the editor 
             below to analyze it.
