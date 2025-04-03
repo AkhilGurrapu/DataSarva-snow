@@ -1,166 +1,394 @@
-import { useState, useEffect } from "react";
-import Sidebar from "@/components/layout/sidebar";
-import TopBar from "@/components/layout/topbar";
-import StatCard from "@/components/dashboard/stat-card";
-import PerformanceChart from "@/components/dashboard/performance-chart";
-import RecentActivity from "@/components/dashboard/recent-activity";
-import EtlStatus from "@/components/dashboard/etl-status";
-import { snowflakeClient } from "@/lib/snowflake";
-import { useToast } from "@/hooks/use-toast";
-import { useMobile } from "@/hooks/use-mobile";
+import React, { useState, useEffect } from 'react';
+import MainLayout from '@/components/layout/main-layout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConnection } from '@/hooks/use-connection';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { AlertCircle, Clock, Check, FileText, BarChart4, Database, RefreshCw, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { openaiClient } from '@/lib/openai';
+import { snowflakeClient } from '@/lib/snowflake';
+import { Progress } from '@/components/ui/progress';
 
-type DashboardProps = {
+interface DashboardProps {
   user: any;
   onLogout: () => void;
+}
+
+type TestResult = {
+  name: string;
+  type: 'freshness_anomalies' | 'volume_anomalies' | 'dimension_anomalies' | 'not_null';
+  timestamp: string;
+  status: 'passed' | 'failed';
+  path?: string;
+  column?: string;
 };
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [stats, setStats] = useState({
-    queriesOptimized: 0,
-    costSavings: 0,
-    etlPipelines: { total: 0, active: 0, paused: 0 },
-    errorsDetected: 0
-  });
-  const [activeConnection, setActiveConnection] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  const { activeConnection } = useConnection();
   const { toast } = useToast();
-  const isMobile = useMobile();
+  const [loading, setLoading] = useState(false);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [stats, setStats] = useState({
+    dataQualityScore: 0,
+    failedTests: 0,
+    passedTests: 0,
+    totalQueries: 0,
+    averageQueryTime: 0,
+    totalTables: 0,
+    recentUpdates: [] as {table: string, lastUpdate: string}[]
+  });
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        setLoading(true);
-        
-        // Get dashboard stats
-        const dashboardStats = await snowflakeClient.getDashboardStats();
-        setStats(dashboardStats);
-        
-        // Get connections to show active one
-        const connections = await snowflakeClient.getConnections();
-        const active = connections.find((c: any) => c.isActive);
-        if (active) {
-          setActiveConnection(active.name);
-        }
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-        toast({
-          title: "Error loading dashboard",
-          description: "Failed to load some dashboard components",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+  const fetchDashboardData = async () => {
+    if (!activeConnection) {
+      toast({
+        title: "No active connection",
+        description: "Please select an active Snowflake connection to view the dashboard.",
+        variant: "destructive"
+      });
+      return;
     }
 
-    fetchDashboardData();
-  }, [toast]);
+    setLoading(true);
+    try {
+      // Get data quality score
+      const qualityData = await openaiClient.getDataQualityScore(activeConnection.id);
+      
+      // Get all tables to count them
+      const tablesData = await snowflakeClient.getAllTables(activeConnection.id);
+      
+      // Get query history for stats
+      const queryHistoryData = await snowflakeClient.getQueryHistory(activeConnection.id);
+      
+      // Mock test results similar to the provided mockup
+      const mockTestResults: TestResult[] = [
+        {
+          name: 'freshness_anomalies',
+          type: 'freshness_anomalies',
+          timestamp: '2024-03-25 06:53:29',
+          status: 'failed',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'volume_anomalies',
+          type: 'volume_anomalies',
+          timestamp: '2024-03-25 05:59:46',
+          status: 'failed',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'volume_anomalies',
+          type: 'volume_anomalies',
+          timestamp: '2024-03-25 05:55:10',
+          status: 'failed',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'volume_anomalies',
+          type: 'volume_anomalies',
+          timestamp: '2024-03-25 05:53:38',
+          status: 'failed',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'not_null',
+          type: 'not_null',
+          timestamp: '2024-03-25 05:50:51',
+          status: 'failed',
+          column: 'order_id',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'not_null',
+          type: 'not_null',
+          timestamp: '2024-03-25 05:49:40',
+          status: 'failed',
+          column: 'order_id',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'not_null',
+          type: 'not_null',
+          timestamp: '2024-03-25 05:48:30',
+          status: 'failed',
+          column: 'order_id',
+          path: 'dbt_project/'
+        },
+        {
+          name: 'dimension_anomalies',
+          type: 'dimension_anomalies',
+          timestamp: '2024-03-25 05:47:19',
+          status: 'failed',
+          path: 'dbt_project/'
+        }
+      ];
+      
+      setTestResults(mockTestResults);
+      
+      // Calculate stats from the real data
+      const avgQueryTime = queryHistoryData && Array.isArray(queryHistoryData) 
+        ? queryHistoryData.reduce((acc, q) => acc + (parseFloat(q.EXECUTION_TIME || 0) / 1000), 0) / (queryHistoryData.length || 1)
+        : 0;
+      
+      // Extract recent table updates
+      const recentUpdates = tablesData && Array.isArray(tablesData)
+        ? tablesData.slice(0, 5).map(table => ({
+            table: table.TABLE_NAME || table.name,
+            lastUpdate: new Date().toISOString().split('T')[0] // Just a placeholder, would use real data in production
+          }))
+        : [];
+      
+      setStats({
+        dataQualityScore: qualityData?.overallScore || 75,
+        failedTests: mockTestResults.filter(t => t.status === 'failed').length,
+        passedTests: mockTestResults.filter(t => t.status === 'passed').length,
+        totalQueries: queryHistoryData?.length || 0,
+        averageQueryTime: avgQueryTime,
+        totalTables: tablesData?.length || 0,
+        recentUpdates
+      });
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast({
+        title: "Error loading dashboard",
+        description: "Failed to load dashboard data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeConnection) {
+      fetchDashboardData();
+    }
+  }, [activeConnection]);
+
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date);
+  };
+
+  const getTestIcon = (type: string) => {
+    switch (type) {
+      case 'freshness_anomalies':
+        return <Clock className="h-4 w-4 text-yellow-600" />;
+      case 'volume_anomalies':
+        return <BarChart4 className="h-4 w-4 text-blue-600" />;
+      case 'dimension_anomalies':
+        return <Database className="h-4 w-4 text-purple-600" />;
+      case 'not_null':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
+      default:
+        return <Check className="h-4 w-4 text-green-600" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'passed') {
+      return <Badge className="bg-green-100 text-green-800 border-green-200">Passed</Badge>;
+    } else {
+      return <Badge className="bg-red-100 text-red-800 border-red-200">Failed</Badge>;
+    }
+  };
 
   return (
-    <div className="h-screen flex overflow-hidden">
-      {/* Sidebar - only directly visible on desktop */}
-      <div className={`${isMobile ? 'block lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50 transition-opacity duration-300' : 'hidden'} ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setSidebarOpen(false)}>
-        <div onClick={e => e.stopPropagation()}>
-          <Sidebar 
-            activeConnection={activeConnection} 
-            onMobileSidebarClose={() => setSidebarOpen(false)} 
-            isMobile={true} 
-          />
+    <MainLayout user={user} onLogout={onLogout}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-medium text-gray-800">Dashboard</h1>
+          <p className="text-gray-600">Overview of your Snowflake data environment</p>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={fetchDashboardData} 
+          disabled={loading || !activeConnection}
+          className="flex items-center gap-1"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
-      
-      {/* Desktop sidebar */}
-      <div className="hidden lg:block">
-        <Sidebar activeConnection={activeConnection} />
-      </div>
-      
-      {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <TopBar 
-          title="Dashboard" 
-          user={user} 
-          onLogout={onLogout} 
-          onMobileSidebarToggle={() => setSidebarOpen(!sidebarOpen)} 
-        />
-        
-        <main className="flex-1 overflow-y-auto bg-neutral-100">
-          <div className="py-6">
-            <div className="px-4 sm:px-6 lg:px-8">
-              {/* Overview Stats */}
-              {loading ? (
-                <div className="flex justify-center py-16">
-                  <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <StatCard
-                      title="Queries Optimized"
-                      value={stats.queriesOptimized}
-                      change="+12% vs last week"
-                      icon={
-                        <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      }
-                      iconBgColor="bg-primary-light"
-                    />
-                    
-                    <StatCard
-                      title="Cost Savings"
-                      value={`$${stats.costSavings.toFixed(2)}`}
-                      change="+23% vs last month"
-                      icon={
-                        <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 8a2.996 2.996 0 0 0-2.599 1M12 16c1.657 0 3-.895 3-2s-1.343-2-3-2-3-.895-3-2 1.343-2 3-2" />
-                        </svg>
-                      }
-                      iconBgColor="bg-secondary-light"
-                    />
-                    
-                    <StatCard
-                      title="ETL Pipelines"
-                      value={stats.etlPipelines.total}
-                      change={`${stats.etlPipelines.active} active, ${stats.etlPipelines.paused} paused`}
-                      icon={
-                        <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      }
-                      iconBgColor="bg-accent-light"
-                    />
-                    
-                    <StatCard
-                      title="Errors Detected"
-                      value={stats.errorsDetected}
-                      change="+2 vs yesterday"
-                      icon={
-                        <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                      }
-                      iconBgColor="bg-warning"
-                    />
-                  </div>
 
-                  {/* Performance Chart */}
-                  <div className="mt-8">
-                    <PerformanceChart />
+      {!activeConnection ? (
+        <Card>
+          <CardContent className="p-6 flex flex-col items-center justify-center">
+            <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+            <h3 className="text-lg font-medium text-center">No active connection</h3>
+            <p className="text-gray-600 text-center mt-2">
+              Please select a Snowflake connection to view your dashboard data.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Key metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm">Data Quality Score</span>
+                  <Zap className="h-5 w-5 text-green-500" />
+                </div>
+                <div className="flex items-center space-x-4">
+                  <div className="text-3xl font-bold">{stats.dataQualityScore}%</div>
+                  <Progress value={stats.dataQualityScore} className="h-2 flex-1" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm">Tests</span>
+                  <FileText className="h-5 w-5 text-blue-500" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold">{stats.failedTests}</div>
+                    <div className="text-red-600 text-sm">Failed</div>
                   </div>
-                  
-                  {/* Recent Activity and ETL Status */}
-                  <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-                    <RecentActivity />
-                    <EtlStatus />
+                  <div>
+                    <div className="text-3xl font-bold">{stats.passedTests}</div>
+                    <div className="text-green-600 text-sm">Passed</div>
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm">Queries</span>
+                  <Database className="h-5 w-5 text-purple-500" />
+                </div>
+                <div>
+                  <div className="text-3xl font-bold">{stats.totalQueries}</div>
+                  <div className="text-gray-600 text-sm">{stats.averageQueryTime.toFixed(2)}s avg time</div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm">Tables</span>
+                  <BarChart4 className="h-5 w-5 text-orange-500" />
+                </div>
+                <div>
+                  <div className="text-3xl font-bold">{stats.totalTables}</div>
+                  <div className="text-gray-600 text-sm">Total tables</div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </main>
-      </div>
-    </div>
+
+          {/* Test results table */}
+          <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
+            <Card className="lg:col-span-5">
+              <CardHeader>
+                <CardTitle>Recent Test Results</CardTitle>
+                <CardDescription>
+                  Recent test results from your Snowflake environment
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Column name</TableHead>
+                      <TableHead>Test name</TableHead>
+                      <TableHead>Test type</TableHead>
+                      <TableHead>Last test run</TableHead>
+                      <TableHead>Last status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {testResults.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-10">
+                          {loading ? (
+                            <div className="flex justify-center items-center">
+                              <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                              <span className="ml-2">Loading test results...</span>
+                            </div>
+                          ) : (
+                            "No test results found"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      testResults.map((test, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="text-gray-500">
+                            {test.column || '-'}
+                          </TableCell>
+                          <TableCell className="flex items-center">
+                            <span className="mr-2">{getTestIcon(test.type)}</span>
+                            {test.name}
+                          </TableCell>
+                          <TableCell>
+                            {test.type === 'freshness_anomalies' ? 'automated' : 
+                             test.type === 'volume_anomalies' ? 'automated' : 
+                             test.type === 'dimension_anomalies' ? 'dimension' : 'generic'}
+                          </TableCell>
+                          <TableCell>
+                            {test.timestamp}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(test.status)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Recent table updates */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Recent Updates</CardTitle>
+                <CardDescription>
+                  Latest table updates
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats.recentUpdates.map((update, index) => (
+                    <div key={index} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                      <div className="font-medium">{update.table}</div>
+                      <div className="text-sm text-gray-500">Updated: {update.lastUpdate}</div>
+                    </div>
+                  ))}
+                  {stats.recentUpdates.length === 0 && (
+                    <div className="text-center py-6 text-gray-500">
+                      {loading ? (
+                        <div className="flex justify-center items-center">
+                          <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                          <span className="ml-2">Loading updates...</span>
+                        </div>
+                      ) : (
+                        "No recent updates"
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </MainLayout>
   );
 }

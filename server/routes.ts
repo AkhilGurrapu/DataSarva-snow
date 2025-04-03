@@ -1891,6 +1891,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Connection-specific query history endpoint
+  app.get("/api/snowflake/:connectionId/query-history", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const connectionId = parseInt(req.params.connectionId, 10);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      
+      const connection = await storage.getConnection(connectionId);
+      
+      if (!connection) {
+        return res.status(404).json({ message: "Connection not found" });
+      }
+      
+      if (connection.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      try {
+        // Set the role to ACCOUNTADMIN for accessing ACCOUNT_USAGE
+        await snowflakeService.executeQuery(connection, "USE ROLE ACCOUNTADMIN");
+        
+        // Query the ACCOUNT_USAGE.QUERY_HISTORY view
+        const query = `
+          SELECT 
+            QUERY_ID,
+            QUERY_TEXT,
+            START_TIME,
+            WAREHOUSE_NAME,
+            EXECUTION_TIME,
+            COMPILATION_TIME,
+            CREDITS_USED_CLOUD_SERVICES,
+            QUERY_TYPE,
+            DATABASE_NAME,
+            SCHEMA_NAME,
+            EXECUTION_STATUS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            BYTES_SCANNED,
+            ROWS_PRODUCED,
+            COMPILATION_TIME + EXECUTION_TIME AS TOTAL_ELAPSED_TIME,
+            QUEUED_OVERLOAD_TIME
+          FROM 
+            SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+          WHERE 
+            START_TIME >= DATEADD(day, -30, CURRENT_TIMESTAMP())
+          ORDER BY 
+            START_TIME DESC
+          LIMIT ${limit}
+        `;
+        
+        const result = await snowflakeService.executeQuery(connection, query);
+        
+        if (result && result.results) {
+          return res.json(result.results);
+        } else {
+          return res.json([]);
+        }
+      } catch (snowflakeError: any) {
+        console.error("Error querying Snowflake:", snowflakeError);
+        
+        // If there's an error with Snowflake, fall back to the local storage
+        const queryHistory = await storage.getQueryHistoryByUserId(userId, limit);
+        res.json(queryHistory);
+      }
+    } catch (err: any) {
+      console.error("Error in query history endpoint:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post("/api/snowflake/:connectionId/get-data-quality-score", isAuthenticated, async (req, res) => {
     try {
       const { connectionId } = req.params;

@@ -85,6 +85,11 @@ function AuthRouter() {
         {/* Routes that require an active Snowflake connection */}
         <Route path="/" component={() => (
           <ConnectionRequiredWrapper>
+            <Dashboard user={user} onLogout={handleLogout} />
+          </ConnectionRequiredWrapper>
+        )} />
+        <Route path="/home" component={() => (
+          <ConnectionRequiredWrapper>
             <Home user={user} onLogout={handleLogout} />
           </ConnectionRequiredWrapper>
         )} />

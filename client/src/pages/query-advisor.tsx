@@ -77,8 +77,8 @@ export default function QueryAdvisor({ user, onLogout }: QueryAdvisorProps) {
       setLoading(true);
       setError(null);
       
-      // Call the API to get query history
-      const data = await snowflakeClient.getQueryHistory(20); // Get last 20 queries
+      // Call the API to get query history with active connection ID
+      const data = await snowflakeClient.getQueryHistory(activeConnection.id); // Get history for current connection
       
       if (data && Array.isArray(data)) {
         // Format the data to match our QueryHistory type
